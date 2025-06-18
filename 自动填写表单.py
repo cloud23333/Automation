@@ -128,8 +128,8 @@ time.sleep(0.2)
 
 # 产品信息
 # 假设你已经获得了如下变量
-product_title = "100Pcs hematite beads "
-product_desc = "good beads"
+product_title = "Square Hematite Beads 3/4/6/8mm Black 50-140pcs for DIY Jewelry"
+product_desc = "This set features 50–140 square-shaped black hematite beads, available in 3mm, 4mm, 6mm, and 8mm sizes. Made from natural hematite stone with a sleek black finish, these beads are smooth, durable, and add a modern, elegant look to any jewelry piece. Ideal for bracelets, necklaces, earrings, and other DIY craft projects, the versatile square shape makes them perfect as spacers or main accents in your designs."
 global_price = "3"
 
 # 产品标题
