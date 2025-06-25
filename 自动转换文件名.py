@@ -5,9 +5,11 @@ from PIL import Image
 import re
 from tkinter import Tk, filedialog, messagebox
 
+
 def safe_filename(s):
-    s = re.sub(r'[^A-Za-z0-9_-]', '', s)
+    s = re.sub(r"[^A-Za-z0-9_-]", "", s)
     return s
+
 
 def pdf_to_image(pdf_path):
     doc = fitz.open(pdf_path)
@@ -16,11 +18,13 @@ def pdf_to_image(pdf_path):
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     return img
 
+
 def extract_barcode(img):
     results = decode(img)
     if not results:
         return None
     return results[0].data.decode("utf-8")
+
 
 def process_pdf(pdf_path):
     img = pdf_to_image(pdf_path)
@@ -45,13 +49,13 @@ def process_pdf(pdf_path):
     else:
         print(f"{os.path.basename(pdf_path)} 未识别到条码")
 
+
 def main():
     root = Tk()
     root.withdraw()
 
     pdf_paths = filedialog.askopenfilenames(
-        title="选择PDF文件（可多选）",
-        filetypes=[("PDF Files", "*.pdf")]
+        title="选择PDF文件（可多选）", filetypes=[("PDF Files", "*.pdf")]
     )
     if not pdf_paths:
         messagebox.showinfo("未选择", "未选择任何文件，程序结束。")
@@ -61,6 +65,7 @@ def main():
         process_pdf(pdf_path)
 
     messagebox.showinfo("完成", "全部文件处理完成！")
+
 
 if __name__ == "__main__":
     main()
