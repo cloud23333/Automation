@@ -1,75 +1,23 @@
+import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import pywinauto
+import os
 
-# ==== 参数区 ====
-info_dict = {
-    "category": "Beads(珠子)",
-    "attribute": "Generic",
-    "attr_index": 1,
-    "attr_value": "beads",
-    "title": "100Pcs hematite beads ",
-    "desc": "good beads",
-    "global_price": "3",
-}
-variants_dict = {"sizes": ["3", "4", "6", "8"], "pack": ["5"], "color": ["Black"]}
-sku_values = ["HDS3-3mm", "HDS3-4mm", "HDS3-6mm", "HDS3-8mm"]
-upload_tasks = [
-    {
-        "button_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[1]/dt/div[1]/button",
-        "menu_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[1]/dt/div[1]/ul/li[1]/a",
-        "image_paths": [
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\选项\3mm.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图1.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图2.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图3.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图4.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图5.jpg",
-        ],
-    },
-    {
-        "button_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[2]/dt/div[1]/button",
-        "menu_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[2]/dt/div[1]/ul/li[1]/a",
-        "image_paths": [
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\选项\4mm.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图1.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图2.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图3.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图4.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图5.jpg",
-        ],
-    },
-    {
-        "button_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[3]/dt/div[1]/button",
-        "menu_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[3]/dt/div[1]/ul/li[1]/a",
-        "image_paths": [
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\选项\6mm.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图1.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图2.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图3.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图4.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图5.jpg",
-        ],
-    },
-    {
-        "button_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[4]/dt/div[1]/button",
-        "menu_xpath": "/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[4]/dt/div[1]/ul/li[1]/a",
-        "image_paths": [
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\选项\8mm.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图1.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图2.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图3.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图4.jpg",
-            r"\\Desktop-inv4qoc\图片数据\BTFBES 店铺图片\黑胆石\HDS3\主图5.jpg",
-        ],
-    },
-]
+# 1. 读取主表和图片表
+df_products = pd.read_excel(
+    r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\products.xlsx",
+    engine="openpyxl",
+)
+df_images = pd.read_excel(
+    r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\images.xlsx",
+    engine="openpyxl",
+)
 
 
-# ==== 功能函数 ====
 def close_all_close_buttons(driver, try_times=2):
     for _ in range(try_times):
         close_buttons = driver.find_elements(
@@ -90,13 +38,28 @@ def fill_basic_info(driver, wait, info):
     category_select = Select(driver.find_element(By.ID, "categoryHistoryId"))
     category_select.select_by_visible_text(info["category"])
     time.sleep(0.5)
-    attr_input = wait.until(
-        EC.element_to_be_clickable(
-            (By.XPATH, '//*[@id="productAttributeShow"]/table/tbody/tr[1]/td[2]/input')
-        )
-    )
-    attr_input.clear()
-    attr_input.send_keys(info.get("attribute", "Generic"))
+
+    # 1. 保险的属性输入
+    attr_xpath = '//*[@id="productAttributeShow"]/table/tbody/tr[1]/td[2]/input'
+    attr_val = info.get("attribute", "Generic")
+    for _ in range(5):
+        try:
+            attr_input = wait.until(EC.element_to_be_clickable((By.XPATH, attr_xpath)))
+            # 有时候虽然clickable其实还被遮住或被动画挡着，这里再加一个is_displayed判断更稳
+            if attr_input.is_displayed() and attr_input.is_enabled():
+                attr_input.clear()
+                attr_input.send_keys(attr_val)
+                break
+        except Exception as e:
+            print(f"attr_input not ready, retry... {e}")
+            time.sleep(0.5)
+    else:
+        # 尝试了5次都不行，JS强制写入
+        print("多次尝试失败，JS强制写入属性！")
+        attr_input = driver.find_element(By.XPATH, attr_xpath)
+        driver.execute_script("arguments[0].value=arguments[1];", attr_input, attr_val)
+
+    # 2. 其它内容正常处理
     attr_select = Select(
         driver.find_element(
             By.XPATH, '//*[@id="productAttributeShow"]/table/tbody/tr[2]/td[2]/select'
@@ -116,7 +79,7 @@ def fill_basic_info(driver, wait, info):
     desc_input.send_keys(info["desc"])
     global_price_input = driver.find_element(By.XPATH, '//*[@id="globalPrice"]')
     global_price_input.clear()
-    global_price_input.send_keys(info["global_price"])
+    global_price_input.send_keys(str(info["global_price"]))
     time.sleep(0.2)
 
 
@@ -130,7 +93,7 @@ def fill_site_prices(driver, price):
     for xpath in site_price_xpaths:
         inp = driver.find_element(By.XPATH, xpath)
         inp.clear()
-        inp.send_keys(price)
+        inp.send_keys(str(price))
 
 
 def fill_listing_type(driver):
@@ -144,49 +107,103 @@ def fill_listing_type(driver):
 
 
 def fill_variants(driver, wait, variants):
+    # 第1组：尺寸
     select_1 = driver.find_element(
         By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[1]/td[2]/div[1]/select'
     )
     Select(select_1).select_by_index(1)
-    input_box = driver.find_element(
-        By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[1]/td[2]/div[3]/input'
-    )
-    add_button = driver.find_element(
-        By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[1]/td[2]/div[3]/button'
-    )
+    input_box_xpath = '//*[@id="skuParameterList"]/tbody/tr[1]/td[2]/div[3]/input'
+    add_button_xpath = '//*[@id="skuParameterList"]/tbody/tr[1]/td[2]/div[3]/button'
+
     for value in variants["sizes"]:
-        input_box.clear()
-        input_box.send_keys(value)
-        add_button.click()
-        time.sleep(0.2)
+        for _ in range(5):
+            input_box = wait.until(
+                EC.presence_of_element_located((By.XPATH, input_box_xpath))
+            )
+            if input_box.is_displayed() and input_box.is_enabled():
+                try:
+                    input_box.clear()
+                    input_box.send_keys(str(value))
+                    driver.find_element(By.XPATH, add_button_xpath).click()
+                    time.sleep(0.2)
+                    break
+                except Exception as e:
+                    print(f"input_box 交互失败（sizes），重试... {e}")
+                    time.sleep(0.3)
+            else:
+                print("input_box 不可交互（sizes），等待重试...")
+                time.sleep(0.3)
+        else:
+            print(f"多次尝试失败（sizes），用JS强制赋值: {value}")
+            driver.execute_script(
+                "arguments[0].value=arguments[1];", input_box, str(value)
+            )
+            driver.find_element(By.XPATH, add_button_xpath).click()
+            time.sleep(0.2)
+
+    # 第2组：pack
     select_2 = driver.find_element(
         By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[1]/select'
     )
     Select(select_2).select_by_index(1)
-    input_box_2 = driver.find_element(
-        By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/input'
-    )
-    add_button_2 = driver.find_element(
-        By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/button'
-    )
+    input_box_2_xpath = '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/input'
+    add_button_2_xpath = '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/button'
+
     for value in variants["pack"]:
-        input_box_2.clear()
-        input_box_2.send_keys(value)
-        add_button_2.click()
-        time.sleep(0.2)
-    color_input = wait.until(
-        EC.presence_of_element_located(
-            (By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[3]/td[2]/div[3]/input')
-        )
-    )
-    add_button = driver.find_element(
-        By.XPATH, '//*[@id="skuParameterList"]/tbody/tr[3]/td[2]/div[3]/button'
-    )
+        for _ in range(5):
+            input_box_2 = wait.until(
+                EC.presence_of_element_located((By.XPATH, input_box_2_xpath))
+            )
+            if input_box_2.is_displayed() and input_box_2.is_enabled():
+                try:
+                    input_box_2.clear()
+                    input_box_2.send_keys(str(value))
+                    driver.find_element(By.XPATH, add_button_2_xpath).click()
+                    time.sleep(0.2)
+                    break
+                except Exception as e:
+                    print(f"input_box_2 交互失败（pack），重试... {e}")
+                    time.sleep(0.3)
+            else:
+                print("input_box_2 不可交互（pack），等待重试...")
+                time.sleep(0.3)
+        else:
+            print(f"多次尝试失败（pack），用JS强制赋值: {value}")
+            driver.execute_script(
+                "arguments[0].value=arguments[1];", input_box_2, str(value)
+            )
+            driver.find_element(By.XPATH, add_button_2_xpath).click()
+            time.sleep(0.2)
+
+    # 第3组：color
+    color_input_xpath = '//*[@id="skuParameterList"]/tbody/tr[3]/td[2]/div[3]/input'
+    add_button_3_xpath = '//*[@id="skuParameterList"]/tbody/tr[3]/td[2]/div[3]/button'
+
     for value in variants["color"]:
-        color_input.clear()
-        color_input.send_keys(value)
-        add_button.click()
-        time.sleep(0.2)
+        for _ in range(5):
+            color_input = wait.until(
+                EC.presence_of_element_located((By.XPATH, color_input_xpath))
+            )
+            if color_input.is_displayed() and color_input.is_enabled():
+                try:
+                    color_input.clear()
+                    color_input.send_keys(str(value))
+                    driver.find_element(By.XPATH, add_button_3_xpath).click()
+                    time.sleep(0.2)
+                    break
+                except Exception as e:
+                    print(f"color_input 交互失败（color），重试... {e}")
+                    time.sleep(0.3)
+            else:
+                print("color_input 不可交互（color），等待重试...")
+                time.sleep(0.3)
+        else:
+            print(f"多次尝试失败（color），用JS强制赋值: {value}")
+            driver.execute_script(
+                "arguments[0].value=arguments[1];", color_input, str(value)
+            )
+            driver.find_element(By.XPATH, add_button_3_xpath).click()
+            time.sleep(0.2)
 
 
 def fill_sku_details(driver, wait, sku_list):
@@ -196,6 +213,52 @@ def fill_sku_details(driver, wait, sku_list):
         input_elem = driver.find_element(By.XPATH, input_xpath)
         input_elem.clear()
         input_elem.send_keys(sku)
+
+    # 点击“UPC”批量设置
+    driver.find_element(
+        By.XPATH, '//*[@id="mercadoSkuAdd"]/table/thead/tr/th[5]/span[2]/a'
+    ).click()
+    # 等弹窗出现
+    wait.until(EC.visibility_of_element_located((By.XPATH, '//*[@id="upcBatchEdit"]')))
+
+    # ====== 新增：选择下拉框第二项 ======
+    # 等待下拉框出现且可点击
+    upc_select_elem = wait.until(
+        EC.element_to_be_clickable((By.XPATH, '//*[@id="upcSelect"]'))
+    )
+    select_obj = Select(upc_select_elem)
+
+    # 等option足够
+    for _ in range(10):
+        if len(select_obj.options) > 1:
+            break
+        time.sleep(0.3)
+
+    # 打印调试
+    print("upcSelect options:", [o.text for o in select_obj.options])
+
+    try:
+        select_obj.select_by_index(1)  # 1为“美客多”
+    except Exception as e:
+        print("选择UPC下拉框第二项失败，错误：", e)
+
+    # 勾选“随机UPC”第2个radio
+    wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                '//*[@id="upcBatchEdit"]/div[2]/div/div[2]/table/tbody/tr[4]/td[2]/label[2]/input',
+            )
+        )
+    ).click()
+    # 点确定
+    wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, '//*[@id="upcBatchEdit"]/div[2]/div/div[3]/button[1]')
+        )
+    ).click()
+    time.sleep(0.5)
+    # 批量设置包裹、重量、库存
     driver.find_element(
         By.XPATH, '//*[@id="mercadoSkuAdd"]/table/thead/tr/th[6]/span[2]/a'
     ).click()
@@ -242,6 +305,9 @@ def fill_sku_details(driver, wait, sku_list):
 
 def upload_img_in_one_slot(driver, button_xpath, menu_xpath, img_list):
     for img_path in img_list:
+        if not os.path.exists(img_path):
+            print(f"图片文件不存在，已跳过：{img_path}")
+            continue  # 文件不存在就跳过
         upload_btn = driver.find_element(By.XPATH, button_xpath)
         upload_btn.click()
         time.sleep(0.3)
@@ -277,29 +343,62 @@ def fill_additional_info(driver, wait):
     time.sleep(0.2)
 
 
-# ==== 主流程 ====
-if __name__ == "__main__":
-    username = "Cloud23333"
-    password = "Dzj9876543"
+def get_img_paths_from_row(row):
+    img_paths = []
+    for i in range(1, 21):  # 如果你最多img_path10就写range(1, 11)
+        col = f"img_path{i}"
+        if col in row and pd.notna(row[col]) and str(row[col]).strip():
+            img_paths.append(str(row[col]).strip())
+    return img_paths
 
-    driver = webdriver.Chrome()
-    driver.get("https://www.dianxiaomi.com/")
-    time.sleep(1)
-    driver.find_element(By.ID, "exampleInputName").send_keys(username)
-    driver.find_element(By.ID, "exampleInputPassword").send_keys(password)
-    input("请在浏览器手动输入验证码，然后回车继续...")
-    time.sleep(5)
+
+# 2. 启动浏览器、登录一次
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 20)
+driver.get("https://www.dianxiaomi.com/")
+time.sleep(1)
+driver.find_element(By.ID, "exampleInputName").send_keys("Cloud23333")
+driver.find_element(By.ID, "exampleInputPassword").send_keys("Dzj9876543")
+input("请在浏览器手动输入验证码，然后回车继续...")
+time.sleep(5)
+
+# 3. 主批量上新流程
+for _, product_row in df_products.iterrows():
+    product_id = product_row["id"]
+    info_dict = {
+        "category": product_row["category"],
+        "attribute": product_row["attribute"],
+        "attr_index": 1,
+        "attr_value": product_row["attr_value"],
+        "title": product_row["title"],
+        "desc": product_row["desc"],
+        "global_price": str(product_row["global_price"]),
+    }
+    # 提取本产品所有图片和变体取值（每一行是一个SKU）
+    product_images = df_images[df_images["product_id"] == product_id].copy()
+    sizes = product_images["size"].dropna().unique().tolist()
+    packs = product_images["pack"].dropna().unique().tolist()
+    colors = product_images["color"].dropna().unique().tolist()
+    variants_dict = {"sizes": sizes, "pack": packs, "color": colors}
+    sku_values = product_images["sku"].tolist()  # 顺序即页面顺序
+    upload_tasks = []
+    for idx, (_, sku_row) in enumerate(product_images.iterrows()):
+        img_paths = get_img_paths_from_row(sku_row)
+        upload_tasks.append(
+            {
+                "button_xpath": f"/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[{idx+1}]/dt/div[1]/button",
+                "menu_xpath": f"/html/body/form/div/div[11]/div[2]/table/tbody/tr[2]/td[2]/div/dl[{idx+1}]/dt/div[1]/ul/li[1]/a",
+                "image_paths": img_paths,
+            }
+        )
+    print(f"正在上传：{info_dict['title']}")
     driver.get("https://www.dianxiaomi.com/mercadoGlobalProduct/add.htm")
     time.sleep(1)
     close_all_close_buttons(driver, try_times=2)
-
-    # 选择账号
     select_elem = driver.find_element(By.ID, "mercadoShopId")
     shop_select = Select(select_elem)
     shop_select.select_by_visible_text("子杰")
     time.sleep(0.5)
-
-    # 全选
     try:
         label = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//label[contains(., "全选")]'))
@@ -314,8 +413,6 @@ if __name__ == "__main__":
         driver.execute_script("arguments[0].scrollIntoView(true);", checkbox)
         checkbox.click()
     time.sleep(0.2)
-
-    wait = WebDriverWait(driver, 20)
     fill_basic_info(driver, wait, info_dict)
     fill_site_prices(driver, info_dict["global_price"])
     fill_listing_type(driver)
@@ -326,5 +423,8 @@ if __name__ == "__main__":
             driver, task["button_xpath"], task["menu_xpath"], task["image_paths"]
         )
     fill_additional_info(driver, wait)
-    input("流程结束，按回车关闭浏览器...")
-    driver.quit()
+    print(f"{info_dict['title']} 完成\n")
+    time.sleep(1)
+
+input("全部产品上传完毕，回车退出...")
+driver.quit()

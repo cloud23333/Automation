@@ -1,0 +1,93 @@
+\documentclass[UTF8]{ctexart}
+\usepackage[edges]{forest}
+\usepackage[a4paper,margin=1.5cm]{geometry}
+
+\definecolor{foldercolor}{RGB}{124,166,198}
+
+\tikzset{
+  pics/folder/.style={
+    code={
+      \node[inner sep=0pt, minimum size=#1](-foldericon){};
+      \node[folder style, inner sep=0pt, minimum width=0.3*#1, minimum height=0.6*#1, above right, xshift=0.05*#1] at (-foldericon.west){};
+      \node[folder style, inner sep=0pt, minimum size=#1] at (-foldericon.center){};
+    }
+  },
+  pics/folder/.default={20pt},
+  folder style/.style={
+    draw=foldercolor!80!black,
+    top color=foldercolor!40,
+    bottom color=foldercolor
+  }
+}
+
+\forestset{
+  is file/.style={
+    edge path'/.expanded={
+      ([xshift=\forestregister{folder indent}]!u.parent anchor) |- (.child anchor)
+    },
+    inner sep=1pt
+  },
+  this folder size/.style={
+    edge path'/.expanded={
+      ([xshift=\forestregister{folder indent}]!u.parent anchor) |- (.child anchor) pic[solid]{folder=#1}
+    },
+    inner ysep=0.6*#1
+  },
+  folder tree indent/.style={
+    before computing xy={l=#1}
+  },
+  folder icons/.style={
+    folder, this folder size=#1, folder tree indent=3*#1
+  },
+  folder icons/.default={12pt},
+}
+
+\begin{document}
+\begin{forest}
+  for tree={
+    font=\sffamily, 
+    grow'=0,
+    folder indent=.9em, 
+    folder icons,
+    edge=-
+  }
+  [图库
+    [$\enskip$ BXG, this folder size=12pt
+      [$\enskip$风格1
+        [$\enskip$BGX22
+          [尺寸图.jpg, is file]
+          [详情图1.jpg, is file]
+          [详情图2.jpg, is file]
+          [1.jpg, is file]
+          [2.jpg, is file]
+          [...jpg, is file]
+          [$\enskip$选项图
+            [$\enskip$带数量
+              [{BGX22-3\^{}7mm.jpg}, is file]
+              [{BGX22-4\^{}9mm.jpg}, is file]
+              [FZ173.jpg, is file]
+            ]
+            [$\enskip$不带数量
+              [...jpg, is file]]
+            [(固定数量的选项图)]
+          ]
+        ]
+        [$\enskip$BGX24]
+        [$\enskip$BGX25]
+        [$\enskip$BGX26]
+      ]
+      [$\enskip$风格2]
+      [$\enskip$...]
+    ]
+    [$\enskip$HDS
+      [$\enskip$风格1]
+    ]
+    [
+      $\enskip$FZ
+    ]
+    [
+      $\enskip$ZX
+    ]
+  ]
+\end{forest}
+\end{document}
