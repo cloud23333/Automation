@@ -40,9 +40,7 @@ OPTION_TAG_MAP = {
 def normalize_sku(raw: str) -> str:
     """SKU 编码标准化"""
     return (
-        ""
-        if raw is None
-        else (raw.strip().upper().replace("_", "*").replace(" ", ""))
+        "" if raw is None else (raw.strip().upper().replace("_", "*").replace(" ", ""))
     )
 
 

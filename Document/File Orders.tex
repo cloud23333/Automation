@@ -1,126 +1,104 @@
 % 图库结构说明及树状图
 \documentclass[UTF8]{ctexart}
+\usepackage{enumitem}
+\usepackage{geometry}
+\geometry{a4paper, margin=2cm}
 \usepackage[edges]{forest}
-\usepackage[a4paper,margin=1.5cm]{geometry}
 \usepackage{xcolor}
 \usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{float}
 
 % ---- 颜色与图标定义 ---------------------------
 \definecolor{foldercolor}{RGB}{124,166,198}
 
-\tikzset{
-  pics/folder/.style={
-    code={
-      \node[inner sep=0pt, minimum size=#1](-foldericon){};
-      \node[folder style, inner sep=0pt, minimum width=0.3*#1, minimum height=0.6*#1, above right, xshift=0.05*#1] at (-foldericon.west){};
-      \node[folder style, inner sep=0pt, minimum size=#1] at (-foldericon.center){};
-    }
-  },
-  pics/folder/.default={20pt},
-  folder style/.style={
-    draw=foldercolor!80!black,
-    top color=foldercolor!40,
-    bottom color=foldercolor
-  }
-}
+\tikzset{ pics/folder/.style={ code={ \node[inner sep=0pt, minimum size=#1](-foldericon){}; \node[folder style, inner sep=0pt, minimum width=0.3*#1, minimum height=0.6*#1, above right, xshift=0.05*#1] at (-foldericon.west){}; \node[folder style, inner sep=0pt, minimum size=#1] at (-foldericon.center){}; } }, pics/folder/.default={20pt}, folder style/.style={ draw=foldercolor!80!black, top color=foldercolor!40, bottom color=foldercolor } }
 
-\forestset{
-  is file/.style={
-    edge path'/.expanded={
-      ([xshift=\forestregister{folder indent}]!u.parent anchor) |- (.child anchor)
-    },
-    inner sep=1pt
-  },
-  this folder size/.style={
-    edge path'/.expanded={
-      ([xshift=\forestregister{folder indent}]!u.parent anchor) |- (.child anchor) pic[solid]{folder=#1}
-    },
-    inner ysep=0.6*#1
-  },
-  folder tree indent/.style={
-    before computing xy={l=#1}
-  },
-  folder icons/.style={
-    folder, this folder size=#1, folder tree indent=3*#1
-  },
-  folder icons/.default={12pt},
-}
+\forestset{ is file/.style={ edge path'/.expanded={ ([xshift=\forestregister{folder indent}]!u.parent anchor) |- (.child anchor) }, inner sep=1pt }, this folder size/.style={ edge path'/.expanded={ ([xshift=\forestregister{folder indent}]!u.parent anchor) |- (.child anchor) pic[solid]{folder=#1} }, inner ysep=0.6*#1 }, folder tree indent/.style={ before computing xy={l=#1} }, folder icons/.style={ folder, this folder size=#1, folder tree indent=3*#1 }, folder icons/.default={12pt}, }
 
 % ------------------------------------------------
 \begin{document}
+	% -------- 图库目录说明 -------------------------
+	\section*{图库目录说明}
+	\begin{enumerate}
+		\item \textbf{根目录：}\verb|图库|，为所有图片的总仓库。
 
-% -------- 图库目录说明 -------------------------
-\section*{图库目录说明}
-\begin{enumerate}
-  \item \textbf{根目录：}\verb|图库| — 所有图片总仓库。
-  \item \textbf{第一层：大类文件夹}（如 \verb|BXG|、\verb|TH|、\verb|MT|……），每个文件夹存放同类产品全部图片。
-  \item \textbf{第二层：风格文件夹}（如 \verb|风格1|、\verb|风格2|……），用于区分同一大类的不同视觉风格或系列。
-  \item \textbf{第三层：SKU 文件夹}（如 \verb|BGX22|、\verb|ZX84| 等）。注意：一个 SKU 文件夹有时是多个相近 SKU 的集合。
-  \item \textbf{SKU 文件夹内容说明：}
-    \begin{itemize}
-      \item 主图、详情图、尺寸图等直接放在 SKU 文件夹下。命名示例：\verb|1.jpg|、\verb|详情图1.jpg|、\verb|尺寸图.jpg|。
-        \begin{itemize}
-          \item 软件通过扫描文件名来判断图片的属性
-          \item 尺寸图要在文件名里包含“尺寸图”。详情图同理
-          \item 主图的文件名可以随便起，只要不包含别的图片的
-        \end{itemize}
-      \item 
-      \item 所有“选项图”统一放在子文件夹 \verb|选项图| 中，再细分为：
-        \begin{itemize}
-          \item \verb|带数量|：文件名包含包装数量（如 \verb|BGX22-3x7mm-500pcs.jpg|）。
-          \item \verb|不带数量|：文件名不含包装数量（如 \verb|BGX22-3x7mm.jpg|）。
-          \item 若有特殊数量，可再建同级目录（如 \verb|100Pcs|）。
-        \end{itemize}
-    \end{itemize}
-  \item \textbf{整理规范：}保持统一命名（格式：\verb|SKU+规格+数量|），不得把图片直接放在“风格”层；每周自检是否有命名或层级错误。
-\end{enumerate}
+		\item \textbf{第一层：大类文件夹}（如 \verb|BXG|、\verb|TH|、\verb|MT| 等），每个大类文件夹存放该类产品的全部图片。
 
+		\item \textbf{第二层：风格文件夹}（如 \verb|风格1|、\verb|风格2| 等），用于区分同一大类下的不同视觉风格或系列。
 
-% -------- 树状图 -------------------------------
-\section*{图库结构树}
-\begin{forest}
-  for tree={
-    font=\sffamily,
-    grow'=0,
-    folder indent=.9em,
-    folder icons,
-    edge=-
-  }
-  [图库
-    [$\enskip$ BXG, this folder size=12pt
-      [$\enskip$风格1
-        [$\enskip$BGX22
-          [尺寸图.jpg, is file]
-          [详情图1.jpg, is file]
-          [详情图2.jpg, is file]
-          [1.jpg, is file]
-          [2.jpg, is file]
-          [...jpg, is file]
-          [$\enskip$选项图
-            [$\enskip$带数量
-              [{BGX22-3\^{}7mm.jpg}, is file]
-              [{BGX22-4\^{}9mm.jpg}, is file]
-              [FZ173.jpg, is file]
-            ]
-            [$\enskip$不带数量
-              [...jpg, is file]
-            ]
-            [(固定数量的选项图)]
-          ]
-        ]
-        [$\enskip$BGX24]
-        [$\enskip$BGX25]
-        [$\enskip$BGX26]
-      ]
-      [$\enskip$风格2]
-      [$\enskip$...]
-    ]
-    [$\enskip$HDS
-      [$\enskip$风格1]
-    ]
-    [$\enskip$FZ]
-    [$\enskip$ZX]
-  ]
-\end{forest}
+		\item \textbf{第三层：SKU 文件夹}（如 \verb|BGX22|、\verb|ZX84| 等）。有时一个
+			SKU 文件夹也可能包含多个相近的 SKU。
 
+		\item \textbf{SKU 文件夹内容说明：}
+			\begin{itemize}
+				\item 主图、详情图、尺寸图等直接放在 SKU 文件夹下，常见命名如 \verb|1.jpg|、\verb|详情图1.jpg|、\verb|尺寸图.jpg|。
+					\begin{itemize}
+						\item 软件根据文件名判断图片类型。尺寸图文件名需包含“尺寸图”，详情图同理。主图文件名可自定义。
+					\end{itemize}
+
+				\item 所有“选项图”需统一放在 SKU 文件夹下的子文件夹 \verb|选项图| 中，内部可进一步细分：
+					\begin{itemize}
+						\item 文件名中禁止使用 \verb|*|，请使用下划线 \verb|_| 替代。
+
+						\item \verb|带数量|：图片中包含包装数量（如
+							\verb|BGX22-3_7mm.jpg|）。
+
+						\item \verb|不带数量|：图片中不含包装数量（如
+							\verb|BGX22-3_7mm.jpg|）。
+					\end{itemize}
+			\end{itemize}
+	\end{enumerate}
+
+	% -------- 树状图 -------------------------------
+	\section*{图库结构树}
+	\begin{forest}
+		for tree={ font=\sffamily, grow'=0, folder indent=.9em, folder icons, edge=- }
+		[图库 [$\enskip$ BXG, this folder size=12pt [$\enskip$风格1 [$\enskip$BGX22
+		[尺寸图.jpg, is file] [详情图1.jpg, is file] [详情图2.jpg, is file] [1.jpg,
+		is file] [2.jpg, is file] [...jpg, is file] [$\enskip$选项图 [$\enskip$带数量
+		[{BGX22-3\^{}7mm.jpg}, is file] [{BGX22-4\^{}9mm.jpg}, is file] [FZ173.jpg, is
+		file] ] [$\enskip$不带数量 [...jpg, is file] ] [(固定数量的选项图)] ] ] [$\enskip$BGX24]
+		[$\enskip$BGX25] [$\enskip$BGX26] ] [$\enskip$风格2] [$\enskip$...] ] [$\enskip$HDS
+		[$\enskip$风格1] ] [$\enskip$FZ] [$\enskip$ZX] ]
+	\end{forest}
+
+  % -------- 图片举例 -------------------------------
+  \section*{插图示例}
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/image.png}
+    \caption{大类文件夹}
+  \end{figure}
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/image copy.png}
+    \caption{风格文件夹}
+  \end{figure}
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/image copy 2.png}
+    \caption{sku文件夹}
+  \end{figure}
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/image copy 6.png}
+    \caption{图片文件夹}
+  \end{figure}
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/image copy 7.png}
+    \caption{选项图文件夹}
+  \end{figure}
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/image copy 5.png}
+    \caption{带数量文件夹}
+  \end{figure} 
 \end{document}
