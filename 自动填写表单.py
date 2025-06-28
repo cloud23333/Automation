@@ -6,17 +6,59 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import pywinauto
 import os
+from pywinauto import Application, findwindows
 
 # 1. 读取主表和图片表
 df_products = pd.read_excel(
-    r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\products.xlsx",
+    r"C:\Users\Administrator\Documents\Mecrado\Automation\products.xlsx",
     engine="openpyxl",
 )
 df_images = pd.read_excel(
-    r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\images.xlsx",
+    r"C:\Users\Administrator\Documents\Mecrado\Automation\images.xlsx",
     engine="openpyxl",
 )
 
+def choose_category(driver, wait, keyword: str):
+    """
+    打开分类弹窗 → 输入关键词 → 点击搜索 → 选第一条结果
+    """
+    # 1) 打开弹窗（“选择分类”按钮）
+    wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, '/html/body/form/div/div[3]/div[2]/table/tbody/tr[3]/td[2]/button')
+        )
+    ).click()
+
+    # 2) 输入关键词
+    search_box = wait.until(
+        EC.element_to_be_clickable((By.ID, 'searchCategory'))
+    )
+    search_box.clear()
+    search_box.send_keys(keyword)
+
+    # 3) 点击搜索按钮
+    wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, '//*[@id="categoryIdAndName"]/div[1]/div/button')
+        )
+    ).click()
+
+    # 4) 点第一条搜索结果
+    wait.until(
+        EC.element_to_be_clickable(
+            (By.XPATH, '//*[@id="categoryIdAndName"]/div[4]/ul/li[1]')
+        )
+    ).click()
+
+    # 5) （如果有“确认/保存”按钮，再点一下；没有就删掉下面两行）
+    try:
+        wait.until(
+            EC.element_to_be_clickable(
+                (By.XPATH, '//*[@id="categoryIdAndName"]/div[5]/button[1]')
+            )
+        ).click()
+    except Exception:
+        pass  # 某些页面没有确认按钮就直接关闭弹窗
 
 def close_all_close_buttons(driver, try_times=2):
     for _ in range(try_times):
@@ -35,9 +77,7 @@ def close_all_close_buttons(driver, try_times=2):
 
 
 def fill_basic_info(driver, wait, info):
-    category_select = Select(driver.find_element(By.ID, "categoryHistoryId"))
-    category_select.select_by_visible_text(info["category"])
-    time.sleep(0.5)
+    choose_category(driver, wait, info["category"])
 
     # 1. 保险的属性输入
     attr_xpath = '//*[@id="productAttributeShow"]/table/tbody/tr[1]/td[2]/input'
@@ -95,6 +135,13 @@ def fill_site_prices(driver, price):
         inp.clear()
         inp.send_keys(str(price))
 
+def _get_open_dialog():
+    # 1) 只取第一个匹配到的窗口句柄
+    handles = findwindows.find_windows(title_re="打开|Open", class_name="#32770")  # Windows file-dlg class
+    if not handles:
+        raise RuntimeError("没找到文件对话框！")
+    # 2) 连接到该句柄
+    return Application(backend="win32").connect(handle=handles[0]).window(handle=handles[0])
 
 def fill_listing_type(driver):
     for i in range(1, 5):
@@ -148,6 +195,7 @@ def fill_variants(driver, wait, variants):
     Select(select_2).select_by_index(1)
     input_box_2_xpath = '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/input'
     add_button_2_xpath = '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/button'
+
 
     for value in variants["pack"]:
         for _ in range(5):
@@ -307,17 +355,17 @@ def upload_img_in_one_slot(driver, button_xpath, menu_xpath, img_list):
     for img_path in img_list:
         if not os.path.exists(img_path):
             print(f"图片文件不存在，已跳过：{img_path}")
-            continue  # 文件不存在就跳过
-        upload_btn = driver.find_element(By.XPATH, button_xpath)
-        upload_btn.click()
+            continue
+
+        driver.find_element(By.XPATH, button_xpath).click()
         time.sleep(0.3)
-        local_img_menu = driver.find_element(By.XPATH, menu_xpath)
-        local_img_menu.click()
+        driver.find_element(By.XPATH, menu_xpath).click()
         time.sleep(1)
-        app = pywinauto.Application().connect(title_re="打开|Open")
-        dlg = app.window(title_re="打开|Open")
+
+        dlg = _get_open_dialog()
+        dlg.wait("ready", timeout=10)          # 等待可交互
         dlg["Edit"].set_edit_text(img_path)
-        dlg["Button"].click()
+        dlg["Button"].click()                 # “打开(&O)”按钮
         time.sleep(2)
 
 
@@ -354,7 +402,7 @@ def get_img_paths_from_row(row):
 
 # 2. 启动浏览器、登录一次
 driver = webdriver.Chrome()
-wait = WebDriverWait(driver, 20)
+wait = WebDriverWait(driver, 5)
 driver.get("https://www.dianxiaomi.com/")
 time.sleep(1)
 driver.find_element(By.ID, "exampleInputName").send_keys("Cloud23333")

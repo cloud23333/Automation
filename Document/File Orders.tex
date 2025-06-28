@@ -1,7 +1,11 @@
+% 图库结构说明及树状图
 \documentclass[UTF8]{ctexart}
 \usepackage[edges]{forest}
 \usepackage[a4paper,margin=1.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{verbatim}
 
+% ---- 颜色与图标定义 ---------------------------
 \definecolor{foldercolor}{RGB}{124,166,198}
 
 \tikzset{
@@ -42,12 +46,43 @@
   folder icons/.default={12pt},
 }
 
+% ------------------------------------------------
 \begin{document}
+
+% -------- 图库目录说明 -------------------------
+\section*{图库目录说明}
+\begin{enumerate}
+  \item \textbf{根目录：}\verb|图库| — 所有图片总仓库。
+  \item \textbf{第一层：大类文件夹}（如 \verb|BXG|、\verb|TH|、\verb|MT|……），每个文件夹存放同类产品全部图片。
+  \item \textbf{第二层：风格文件夹}（如 \verb|风格1|、\verb|风格2|……），用于区分同一大类的不同视觉风格或系列。
+  \item \textbf{第三层：SKU 文件夹}（如 \verb|BGX22|、\verb|ZX84| 等）。注意：一个 SKU 文件夹有时是多个相近 SKU 的集合。
+  \item \textbf{SKU 文件夹内容说明：}
+    \begin{itemize}
+      \item 主图、详情图、尺寸图等直接放在 SKU 文件夹下。命名示例：\verb|1.jpg|、\verb|详情图1.jpg|、\verb|尺寸图.jpg|。
+        \begin{itemize}
+          \item 软件通过扫描文件名来判断图片的属性
+          \item 尺寸图要在文件名里包含“尺寸图”。详情图同理
+          \item 主图的文件名可以随便起，只要不包含别的图片的
+        \end{itemize}
+      \item 
+      \item 所有“选项图”统一放在子文件夹 \verb|选项图| 中，再细分为：
+        \begin{itemize}
+          \item \verb|带数量|：文件名包含包装数量（如 \verb|BGX22-3x7mm-500pcs.jpg|）。
+          \item \verb|不带数量|：文件名不含包装数量（如 \verb|BGX22-3x7mm.jpg|）。
+          \item 若有特殊数量，可再建同级目录（如 \verb|100Pcs|）。
+        \end{itemize}
+    \end{itemize}
+  \item \textbf{整理规范：}保持统一命名（格式：\verb|SKU+规格+数量|），不得把图片直接放在“风格”层；每周自检是否有命名或层级错误。
+\end{enumerate}
+
+
+% -------- 树状图 -------------------------------
+\section*{图库结构树}
 \begin{forest}
   for tree={
-    font=\sffamily, 
+    font=\sffamily,
     grow'=0,
-    folder indent=.9em, 
+    folder indent=.9em,
     folder icons,
     edge=-
   }
@@ -68,7 +103,8 @@
               [FZ173.jpg, is file]
             ]
             [$\enskip$不带数量
-              [...jpg, is file]]
+              [...jpg, is file]
+            ]
             [(固定数量的选项图)]
           ]
         ]
@@ -82,12 +118,9 @@
     [$\enskip$HDS
       [$\enskip$风格1]
     ]
-    [
-      $\enskip$FZ
-    ]
-    [
-      $\enskip$ZX
-    ]
+    [$\enskip$FZ]
+    [$\enskip$ZX]
   ]
 \end{forest}
+
 \end{document}
