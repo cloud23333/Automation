@@ -35,18 +35,17 @@ OPTION_TAG_MAP = {
     "不带数量": "noqty",
 }
 
-
 # ---------- 工具 -------------------------------------------------------------
 def normalize_sku(raw: str) -> str:
     """SKU 编码标准化"""
     return (
-        "" if raw is None else (raw.strip().upper().replace("_", "*").replace(" ", ""))
+        ""
+        if raw is None
+        else (raw.strip().replace("_", "*").replace(" ", ""))
     )
-
 
 def db():  # 连接
     return pymysql.connect(**DB_CFG)
-
 
 # ---------- product_folder ---------------------------------------------------
 def ensure_folder(cur, folder_code, style_name, sku_folder) -> int:
@@ -65,7 +64,6 @@ def ensure_folder(cur, folder_code, style_name, sku_folder) -> int:
     )
     return cur.lastrowid
 
-
 # ---------- option_tag_dict --------------------------------------------------
 def ensure_option_tags(cur):
     cur.execute(
@@ -79,7 +77,6 @@ def ensure_option_tags(cur):
             "INSERT IGNORE INTO option_tag_dict(tag_code,tag_name) VALUES (%s,%s)",
             (code, zh),
         )
-
 
 # ---------- ① Excel → sku ----------------------------------------------------
 def import_sku():
@@ -119,7 +116,6 @@ def import_sku():
             cur.close()
         conn.close()
 
-
 # ---------- ② 扫描图库 -------------------------------------------------------
 def classify(parts, fname):
     """返回 (img_role, option_tag)"""
@@ -132,10 +128,10 @@ def classify(parts, fname):
         return "size", None
     return "main", None
 
-
 def scan_and_link():
     conn, cur = db(), None
     cnt_option = cnt_link = 0
+    not_found_skus = set()  # 用于记录不存在的sku_code
     try:
         cur = conn.cursor()
         ensure_option_tags(cur)
@@ -154,11 +150,17 @@ def scan_and_link():
                 if not fn.lower().endswith(IMG_EXT):
                     continue
                 role, tag = classify(parts, fn)
-                file_path = normpath(abspath(join(root, fn)))
-                file_path = file_path.replace("/", "\\")
+                file_path = normpath(abspath(join(root, fn))).replace("/", "\\")
                 sku_code = (
                     normalize_sku(os.path.splitext(fn)[0]) if role == "option" else None
                 )
+
+                # 关键：校验sku_code是否存在
+                if sku_code:
+                    cur.execute("SELECT 1 FROM sku WHERE sku_code=%s", (sku_code,))
+                    if cur.fetchone() is None:
+                        not_found_skus.add(sku_code)
+                        sku_code = None
 
                 # 插入/更新 image_asset
                 cur.execute(
@@ -169,7 +171,7 @@ def scan_and_link():
                       img_role   = VALUES(img_role),
                       option_tag = VALUES(option_tag),
                       sku_code   = VALUES(sku_code)
-                """,
+                    """,
                     (folder_id, file_path, role, tag, sku_code),
                 )
                 if cur.rowcount and role == "option":
@@ -181,7 +183,7 @@ def scan_and_link():
                         """
                         UPDATE sku SET folder_id=%s
                         WHERE sku_code=%s AND (folder_id IS NULL OR folder_id<>%s)
-                    """,
+                        """,
                         (folder_id, sku_code, folder_id),
                     )
                     if cur.rowcount:
@@ -190,11 +192,22 @@ def scan_and_link():
         conn.commit()
         print(f"[IMG] 新增/更新选项图 {cnt_option} 张")
         print(f"[MAP] SKU ↔ folder 绑定 {cnt_link} 条")
+
+        # 输出所有找不到的sku_code
+        if not_found_skus:
+            with open("missing_skus.txt", "w", encoding="utf-8") as f:
+                for sku in sorted(not_found_skus):
+                    f.write(f"{sku}\n")
+            print(f"\n【以下 sku_code 在 sku 表中不存在，已保存 missing_skus.txt】：")
+            for sku in sorted(not_found_skus):
+                print(sku)
+        else:
+            print("所有选项图 sku_code 均已存在于 sku 表。")
+
     finally:
         if cur:
             cur.close()
         conn.close()
-
 
 # ---------- 主入口 ------------------------------------------------------------
 if __name__ == "__main__":

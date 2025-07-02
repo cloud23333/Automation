@@ -3,50 +3,20 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import os, time
+import time
+import pywinauto
+import os
 from pywinauto import Application, findwindows
-from pywinauto.keyboard import send_keys
-from collections import OrderedDict, defaultdict
 
 # 1. 读取主表和图片表
 df_products = pd.read_excel(
-    r"C:\Users\Administrator\Documents\Mecrado\products.xlsx",
+    r"C:\Users\Administrator\Documents\Mecrado\Automation\products.xlsx",
     engine="openpyxl",
 )
 df_images = pd.read_excel(
-    r"C:\Users\Administrator\Documents\Mecrado\images.xlsx",
+    r"C:\Users\Administrator\Documents\Mecrado\Automation\images.xlsx",
     engine="openpyxl",
 )
-
-
-def _open_uploader(driver, button_xpath, menu_xpath):
-    driver.find_element(By.XPATH, button_xpath).click()
-    time.sleep(0.3)
-    driver.find_element(By.XPATH, menu_xpath).click()
-    time.sleep(1)
-    dlg = _get_open_dialog()
-    dlg.wait("ready", timeout=10)
-    return dlg
-
-
-def _upload_in_dialog(dlg, paths):
-    """
-    paths 都在同一目录 ⇒ 一次多选；否则只能单张（调用处保证）。
-    """
-    dirpath = os.path.dirname(paths[0])
-    dlg["Edit"].set_edit_text(dirpath)
-    send_keys("{ENTER}")
-    time.sleep(0.4)
-
-    if len(paths) == 1:
-        dlg["Edit"].set_edit_text(os.path.basename(paths[0]))
-    else:
-        multi = " ".join(f'"{os.path.basename(p)}"' for p in paths)
-        dlg["Edit"].set_edit_text(multi)
-
-    dlg["Button"].click()  # “打开(&O)”
-    time.sleep(2.5)
-
 
 def choose_category(driver, wait, keyword: str):
     """
@@ -55,15 +25,14 @@ def choose_category(driver, wait, keyword: str):
     # 1) 打开弹窗（“选择分类”按钮）
     wait.until(
         EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                "/html/body/form/div/div[3]/div[2]/table/tbody/tr[3]/td[2]/button",
-            )
+            (By.XPATH, '/html/body/form/div/div[3]/div[2]/table/tbody/tr[3]/td[2]/button')
         )
     ).click()
 
     # 2) 输入关键词
-    search_box = wait.until(EC.element_to_be_clickable((By.ID, "searchCategory")))
+    search_box = wait.until(
+        EC.element_to_be_clickable((By.ID, 'searchCategory'))
+    )
     search_box.clear()
     search_box.send_keys(keyword)
 
@@ -91,7 +60,6 @@ def choose_category(driver, wait, keyword: str):
     except Exception:
         pass  # 某些页面没有确认按钮就直接关闭弹窗
 
-
 def close_all_close_buttons(driver, try_times=2):
     for _ in range(try_times):
         close_buttons = driver.find_elements(
@@ -114,7 +82,7 @@ def fill_basic_info(driver, wait, info):
     # 1. 保险的属性输入
     attr_xpath = '//*[@id="productAttributeShow"]/table/tbody/tr[1]/td[2]/input'
     attr_val = info.get("attribute", "Generic")
-    for _ in range(2):
+    for _ in range(5):
         try:
             attr_input = wait.until(EC.element_to_be_clickable((By.XPATH, attr_xpath)))
             # 有时候虽然clickable其实还被遮住或被动画挡着，这里再加一个is_displayed判断更稳
@@ -154,6 +122,37 @@ def fill_basic_info(driver, wait, info):
     global_price_input.send_keys(str(info["global_price"]))
     time.sleep(0.2)
 
+def _group_by_folder(paths: list[str]) -> dict[str, list[str]]:
+    """{'D:/a': ['D:/a/1.jpg', 'D:/a/2.jpg'], 'D:/b': [...]}"""
+    groups = {}
+    for p in paths:
+        if not os.path.exists(p):
+            print(f"图片不存在，已跳过：{p}")
+            continue
+        folder = os.path.dirname(p)
+        groups.setdefault(folder, []).append(p)
+    return groups
+
+
+def upload_images_grouped(driver, button_xpath, menu_xpath, img_list):
+    """同一目录的图片一次性上传"""
+    folder_map = _group_by_folder(img_list)
+    for folder, files in folder_map.items():
+        # 打开上传菜单
+        driver.find_element(By.XPATH, button_xpath).click()
+        time.sleep(0.3)
+        driver.find_element(By.XPATH, menu_xpath).click()
+        time.sleep(1)
+
+        # 调出文件对话框
+        dlg = _get_open_dialog()
+        dlg.wait("ready", timeout=10)
+
+        # 方法 A：直接把多文件路径写入“文件名”框（最简单）
+        multi_paths = " ".join(f'"{p}"' for p in files)  # 用引号包住，空格分隔
+        dlg["Edit"].set_edit_text(multi_paths)
+        dlg["Button"].click()   # “打开(&O)”
+        time.sleep(0.2)
 
 def fill_site_prices(driver, price):
     site_price_xpaths = [
@@ -167,21 +166,13 @@ def fill_site_prices(driver, price):
         inp.clear()
         inp.send_keys(str(price))
 
-
 def _get_open_dialog():
     # 1) 只取第一个匹配到的窗口句柄
-    handles = findwindows.find_windows(
-        title_re="打开|Open", class_name="#32770"
-    )  # Windows file-dlg class
+    handles = findwindows.find_windows(title_re="打开|Open", class_name="#32770")  # Windows file-dlg class
     if not handles:
         raise RuntimeError("没找到文件对话框！")
     # 2) 连接到该句柄
-    return (
-        Application(backend="win32")
-        .connect(handle=handles[0])
-        .window(handle=handles[0])
-    )
-
+    return Application(backend="win32").connect(handle=handles[0]).window(handle=handles[0])
 
 def fill_listing_type(driver):
     for i in range(1, 5):
@@ -235,6 +226,7 @@ def fill_variants(driver, wait, variants):
     Select(select_2).select_by_index(1)
     input_box_2_xpath = '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/input'
     add_button_2_xpath = '//*[@id="skuParameterList"]/tbody/tr[2]/td[2]/div[3]/button'
+
 
     for value in variants["pack"]:
         for _ in range(5):
@@ -391,33 +383,21 @@ def fill_sku_details(driver, wait, sku_list):
 
 
 def upload_img_in_one_slot(driver, button_xpath, menu_xpath, img_list):
-    """
-    • 同一文件夹 ≥2 张 ⇒ 批量多选一次上传
-    • 只有 1 张的文件夹 ⇒ 单独上传
-    • 顺序以 img_list 首次出现的先后为准
-    """
-    img_list = [p for p in img_list if os.path.exists(p)]
-    if not img_list:
-        print("无可用图片，已跳过")
-        return
+    for img_path in img_list:
+        if not os.path.exists(img_path):
+            print(f"图片文件不存在，已跳过：{img_path}")
+            continue
 
-    # —— 1. 统计每个目录下有几张 —— #
-    dir_count = defaultdict(int)
-    for p in img_list:
-        dir_count[os.path.dirname(p)] += 1
+        driver.find_element(By.XPATH, button_xpath).click()
+        time.sleep(0.3)
+        driver.find_element(By.XPATH, menu_xpath).click()
+        time.sleep(1)
 
-    # —— 2. 维持原顺序分批上传 —— #
-    done_dirs = set()
-    for path in img_list:
-        d = os.path.dirname(path)
-        if d in done_dirs:
-            continue  # 这一目录已经处理过
-        group = [p for p in img_list if os.path.dirname(p) == d]
-
-        dlg = _open_uploader(driver, button_xpath, menu_xpath)
-        _upload_in_dialog(dlg, group)  # group 大小可为 1 或 >1
-
-        done_dirs.add(d)
+        dlg = _get_open_dialog()
+        dlg.wait("ready", timeout=10)          # 等待可交互
+        dlg["Edit"].set_edit_text(img_path)
+        dlg["Button"].click()                 # “打开(&O)”按钮
+        time.sleep(2)
 
 
 def fill_additional_info(driver, wait):
@@ -518,8 +498,11 @@ for _, product_row in df_products.iterrows():
     fill_variants(driver, wait, variants_dict)
     fill_sku_details(driver, wait, sku_values)
     for task in upload_tasks:
-        upload_img_in_one_slot(
-            driver, task["button_xpath"], task["menu_xpath"], task["image_paths"]
+        upload_images_grouped(
+            driver,
+            task["button_xpath"],
+            task["menu_xpath"],
+            task["image_paths"]
         )
     fill_additional_info(driver, wait)
     print(f"{info_dict['title']} 完成\n")
