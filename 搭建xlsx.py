@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-build_product_and_image_excel.py  ·  带 GPT 进度条
+build_product_and_image_excel.py ·  带 GPT 进度条
 --------------------------------------------------
 • 读取 MySQL(product_folder / sku / image_asset)
 • 计算 global_price（不再对 SKU 做 *n 倍处理）
-• DeepSeek-GPT 生成 title / desc，并实时显示进度
+• DeepSeek‑GPT 生成 title / desc，并实时显示进度
 • 导出 products.xlsx、images.xlsx
+
+‼️ 2025‑07‑22 版本变更
+    1. 移除 ROOT_PATH，直接使用 image_asset.file_path（须为绝对路径）
+    2. make_images() 不再拼接路径，仅复制数据库字段
 """
 import os, json, re, time, sys
 import pandas as pd, pymysql
 from openai import OpenAI
 
-# ───────────── 进度条 ─────────────────────────────────────────────────────────
+# ───────────── 进度条 ────────────────────────────────────────────────────────
 try:
     from tqdm import tqdm
 except ImportError:                # 若用户未安装 tqdm，则退化为普通打印
@@ -30,9 +34,9 @@ except ImportError:                # 若用户未安装 tqdm，则退化为普�
                 sys.stdout.write(f"\r[{bar}] {self.i}/{self.n} {pct:5.1f}%")
                 sys.stdout.flush()
             print()
-# ──────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 
-# ===================== 必填参数 =================================================
+# ========================= 必填参数 ==========================================
 DB_CONF = dict(
     host="localhost",
     user="root",
@@ -42,15 +46,14 @@ DB_CONF = dict(
     autocommit=False,
 )
 
-ROOT_PATH       = r"D:\图片录入测试"
-DEEPSEEK_API_KEY = "sk-c73cba2525b74adbb76c271fc7080857"     # ← 改成你的 Key
+DEEPSEEK_API_KEY = "sk-c73cba2525b74adbb76c271fc7080857"   # ← 改成你的 Key
 GPT_MODEL        = "deepseek-chat"
 
-# ====== option_tag 过滤开关 =====================================================
+# ====== option_tag 过滤开关 ===================================================
 OPTION_TAG = "qty"                 # "qty" / "noqty" / "all"
-# ==============================================================================
+# ============================================================================
 
-# ---- 价格计算常量 -------------------------------------------------------------
+# ---- 价格计算常量 -----------------------------------------------------------
 FF = 4.2
 COMMISSION = 0.08
 ACOS_RATE = 0.35
@@ -58,7 +61,7 @@ GROSS_MARGIN = 0.20
 TARGET_REV_RMB = 0.0
 RMB_TO_USD = 0.13927034
 MIN_PRICE_USD = 3.0
-# ==============================================================================
+# ============================================================================
 
 
 def _tag_sql(alias: str = "ia") -> str:
@@ -72,13 +75,14 @@ def db():
 
 
 def load_data():
+    """一次性读取 product_folder / sku / image_asset 三表"""
     conn = db()
     try:
         prod = pd.read_sql(
             f"""
             SELECT pf.id AS folder_id, pf.folder_code, pf.style_name, pf.sku_folder
             FROM product_folder pf
-            WHERE pf.folder_code = 'CCB-电镀塑料'
+            WHERE pf.folder_code = 'MN-玛瑙'
               AND pf.style_name  = '风格1'
               AND EXISTS (
                   SELECT 1 FROM image_asset ia
@@ -97,28 +101,32 @@ def load_data():
 
         img = pd.read_sql(
             f"""
-            SELECT folder_id, file_path, img_role, option_tag, sku_code
-            FROM image_asset
-            WHERE img_role <> 'option'
-            OR (img_role = 'option'
-                {"AND option_tag = '%s'" % OPTION_TAG if OPTION_TAG not in (None, "", "all") else ""}
-            )
+            SELECT ia.folder_id,
+                ia.file_path,
+                ia.img_role,
+                ia.option_tag,
+                ia.sku_code
+            FROM image_asset ia                       -- ← 关键：给 image_asset 起别名 ia
+            WHERE ia.img_role <> 'option'
+            OR (ia.img_role = 'option' {_tag_sql('ia')})
             """,
             conn,
         )
     finally:
         conn.close()
 
+    # 统一 SKU 大写
     sku["sku_code"] = sku.sku_code.str.upper()
     img["sku_code"] = img.sku_code.str.upper()
     return prod, sku, img
 
 
-# -------------------- GPT ------------------------------------------------------
+# -------------------- GPT ----------------------------------------------------
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 
 
 def _strip_fence(txt: str) -> str:
+    """去掉 ```json ...``` fenced‑code 块"""
     return re.sub(r"^```[\s\S]*?\n|\n?```$", "", txt.strip())
 
 
@@ -166,17 +174,17 @@ def gpt_title_desc(names, folder_id, tries=3):
     return "", ""
 
 
-def calc_price_usd(max_cost_rmb):
+def calc_price_usd(max_cost_rmb: float | None) -> float:
+    """根据最高成本价（RMB）反推目标美金售价"""
     pc = max_cost_rmb or 0
-    # 公式里分母多减一个ACOS费率
     p1 = (pc + FF) / (1 - GROSS_MARGIN - COMMISSION - ACOS_RATE)
     p2 = (TARGET_REV_RMB + pc + FF) / (1 - COMMISSION - ACOS_RATE)
     price_rmb = max(p1, p2)
     return max(MIN_PRICE_USD, round(price_rmb * RMB_TO_USD, 2))
 
 
-# -------------------- 生成 products.xlsx ---------------------------------------
-def make_products(prod_df, sku_df, img_df):
+# -------------------- 生成 products.xlsx -------------------------------------
+def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFrame):
     rows, next_id = {}, 10001
     for pf in tqdm(prod_df.itertuples(), total=len(prod_df), desc="GPT generating"):
         tag_mask = True if OPTION_TAG == "all" else (img_df.option_tag == OPTION_TAG)
@@ -221,11 +229,12 @@ def make_products(prod_df, sku_df, img_df):
     return df
 
 
-# -------------------- 生成 images.xlsx -----------------------------------------
-def make_images(prod_df, img_df):
-    img_df["abs_path"] = img_df.file_path.apply(
-        lambda p: os.path.join(ROOT_PATH, p).replace("\\", "\\")
-    )
+# -------------------- 生成 images.xlsx ---------------------------------------
+def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame):
+    """
+    直接使用 image_asset.file_path（应为绝对路径）。
+    若仍在数据库存相对路径，请先在 SQL 层修正。
+    """
     grp = img_df.groupby("folder_id")
 
     out_rows, img_idx = [], 1
@@ -235,15 +244,15 @@ def make_images(prod_df, img_df):
             continue
 
         g = grp.get_group(fid)
-        main   = g[g.img_role == "main"].abs_path.tolist()
-        detail = g[g.img_role == "detail"].abs_path.tolist()
-        size   = g[g.img_role == "size"].abs_path.tolist()
+        main   = g[g.img_role == "main"].file_path.tolist()
+        detail = g[g.img_role == "detail"].file_path.tolist()
+        size   = g[g.img_role == "size"].file_path.tolist()
 
         tag_mask = True if OPTION_TAG == "all" else (g.option_tag == OPTION_TAG)
         opts = g[(g.img_role == "option") & tag_mask]
 
         for r in opts.itertuples():
-            pics = [r.abs_path] + main + detail + size
+            pics = [r.file_path] + main + detail + size
             pics = pics[:10]
 
             row = dict(
@@ -263,7 +272,7 @@ def make_images(prod_df, img_df):
     print(f"[OK] images.xlsx   生成 {len(out_rows)} 行")
 
 
-# -------------------- 主程 ------------------------------------------------------
+# -------------------- 主程入口 ----------------------------------------------
 if __name__ == "__main__":
     print(f"[INFO] OPTION_TAG = {OPTION_TAG}")
     prod_df, sku_df, img_df = load_data()
