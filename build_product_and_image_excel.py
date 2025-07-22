@@ -1,20 +1,38 @@
 # -*- coding: utf-8 -*-
 """
-build_product_and_image_excel.py
-------------------------------------------------
+build_product_and_image_excel.py  ·  带 GPT 进度条
+--------------------------------------------------
 • 读取 MySQL(product_folder / sku / image_asset)
-• 按最高成本价计算 global_price，若结果仍是 3 USD (MIN_PRICE_USD)，
-  就把成本价成倍放大（×2, ×3 …）直至售价 > 3 USD
-• DeepSeek-GPT 生成 title / desc —— 件数 pcs 或克重 g 都会 × 倍并写进标题
+• 计算 global_price（不再对 SKU 做 *n 倍处理）
+• DeepSeek-GPT 生成 title / desc，并实时显示进度
 • 导出 products.xlsx、images.xlsx
-  - products.xlsx：每个产品 1 行，含最终售价
-  - images.xlsx ：option 图逐行，sku 写入时才附 *n（n > 1）
 """
-import os, json, re, time
+import os, json, re, time, sys
 import pandas as pd, pymysql
 from openai import OpenAI
 
-# ===================== 可调参数 =================================================
+# ───────────── 进度条 ─────────────────────────────────────────────────────────
+try:
+    from tqdm import tqdm
+except ImportError:                # 若用户未安装 tqdm，则退化为普通打印
+    class tqdm:                    # noqa: D401
+        def __init__(self, iterable=None, total=None, **kw):
+            self._iter = iterable or range(total or 0)
+            self.i, self.n = 0, total or len(self._iter)
+        def __iter__(self):
+            for obj in self._iter:
+                yield obj
+                self.i += 1
+                width = 50
+                filled = int(self.i / self.n * width)
+                bar = "█" * filled + "-" * (width - filled)
+                pct = self.i / self.n * 100
+                sys.stdout.write(f"\r[{bar}] {self.i}/{self.n} {pct:5.1f}%")
+                sys.stdout.flush()
+            print()
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ===================== 必填参数 =================================================
 DB_CONF = dict(
     host="localhost",
     user="root",
@@ -24,57 +42,46 @@ DB_CONF = dict(
     autocommit=False,
 )
 
-ROOT_PATH = r"D:\图片录入测试"  # 图片根目录
-DEEPSEEK_API_KEY = "sk-c73cba2525b74adbb76c271fc7080857"  # ← 改成你的 Key
-GPT_MODEL = "deepseek-chat"
+ROOT_PATH       = r"D:\图片录入测试"
+DEEPSEEK_API_KEY = "sk-c73cba2525b74adbb76c271fc7080857"     # ← 改成你的 Key
+GPT_MODEL        = "deepseek-chat"
 
 # ====== option_tag 过滤开关 =====================================================
-#   "qty"   → 只处理带数量图
-#   "noqty" → 只处理不带数量图
-#   None / "all" → 两种都处理
-OPTION_TAG = "qty"
+OPTION_TAG = "qty"                 # "qty" / "noqty" / "all"
 # ==============================================================================
 
 # ---- 价格计算常量 -------------------------------------------------------------
-FF = 4.2  # Fulfillment Fee
-COMMISSION = 0.08  # 平台佣金
-GROSS_MARGIN = 0.30  # 目标毛利率 (= 1 - 40%)
-TARGET_REV_RMB = 0.0  # 固定额外营收 (若有)
+FF = 4.2
+COMMISSION = 0.08
+ACOS_RATE = 0.35
+GROSS_MARGIN = 0.20
+TARGET_REV_RMB = 0.0
 RMB_TO_USD = 0.13927034
 MIN_PRICE_USD = 3.0
 # ==============================================================================
 
 
-# -------------------- 工具：生成 SQL 片段 --------------------------------------
 def _tag_sql(alias: str = "ia") -> str:
-    """返回 SQL 的 option_tag 过滤片段；不需过滤则为空串"""
     if OPTION_TAG in (None, "", "all"):
         return ""
     return f"AND {alias}.option_tag = '{OPTION_TAG}'"
 
 
-# -------------------- 数据库 ----------------------------------------------------
 def db():
     return pymysql.connect(**DB_CONF)
 
 
 def load_data():
-    """一次性读出三张表，并把 sku_code 统一转大写，避免大小写不一致"""
     conn = db()
     try:
-        # ① product_folder：至少有一张指定 tag 的 option 图
         prod = pd.read_sql(
             f"""
-            SELECT pf.id   AS folder_id,
-                   pf.folder_code,
-                   pf.style_name,
-                   pf.sku_folder
+            SELECT pf.id AS folder_id, pf.folder_code, pf.style_name, pf.sku_folder
             FROM product_folder pf
-            WHERE pf.folder_code = '碎石'
+            WHERE pf.folder_code = 'CCB-电镀塑料'
               AND pf.style_name  = '风格1'
               AND EXISTS (
-                  SELECT 1
-                  FROM image_asset ia
+                  SELECT 1 FROM image_asset ia
                   WHERE ia.folder_id = pf.id
                     AND ia.img_role  = 'option'
                     {_tag_sql('ia')}
@@ -83,22 +90,18 @@ def load_data():
             conn,
         )
 
-        # ② sku：全部读取
         sku = pd.read_sql(
-            """
-            SELECT sku_code, product_name, cost_price, weight_kg, folder_id
-            FROM sku
-            """,
+            "SELECT sku_code, product_name, cost_price, weight_kg, folder_id FROM sku",
             conn,
         )
 
-        # ③ image_asset：main/detail/size 全部读；option 只读指定 tag
         img = pd.read_sql(
             f"""
             SELECT folder_id, file_path, img_role, option_tag, sku_code
             FROM image_asset
             WHERE img_role <> 'option'
-            OR (img_role = 'option' {"AND option_tag = '%s'" % OPTION_TAG if OPTION_TAG not in (None, "", "all") else ""}
+            OR (img_role = 'option'
+                {"AND option_tag = '%s'" % OPTION_TAG if OPTION_TAG not in (None, "", "all") else ""}
             )
             """,
             conn,
@@ -108,153 +111,96 @@ def load_data():
 
     sku["sku_code"] = sku.sku_code.str.upper()
     img["sku_code"] = img.sku_code.str.upper()
-
     return prod, sku, img
 
 
-# -------------------- GPT 客户端 ------------------------------------------------
+# -------------------- GPT ------------------------------------------------------
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 
 
 def _strip_fence(txt: str) -> str:
-    """去掉 ```json ...``` 围栏（GPT 有时会包围起来）"""
     return re.sub(r"^```[\s\S]*?\n|\n?```$", "", txt.strip())
 
 
-# -------------------- GPT 生成标题/描述 ----------------------------------------
-def gpt_title_desc(names: list[str], mult: int, tries: int = 3) -> tuple[str, str]:
-    """
-    • names 已经过 adjust_qty() 乘倍
-    • 若抓到 pcs 或 g，都在 prompt 里给 GPT 明确提示
-    """
+def gpt_title_desc(names, folder_id, tries=3):
     merged = " ".join(names)
+    pcs_hint = weight_hint = ""
 
-    # (1) 件数提示
-    pcs_hint = ""
-    m_pcs = re.search(r"(\d+)\s*(pcs?|PCS?|Pc|pc|颗|个|色|colors?|Colors?)", merged)
-    if m_pcs:
+    m = re.search(r"(\d+)\s*(pcs?|Pc|颗|个|色|colors?)", merged, re.I)
+    if m:
         pcs_hint = (
-            f"\nEach pack actually contains **{m_pcs.group(1)} pcs**, "
+            f"\nEach pack actually contains **{m.group(1)} pcs**, "
             "this exact number MUST appear in the title."
         )
-
-    # (2) 克重提示
-    weight_hint = ""
-    m_g = re.search(r"(\d+)\s*(g|G|克|grams?)", merged)
-    if m_g:
+    m = re.search(r"(\d+)\s*(g|克|grams?)", merged, re.I)
+    if m:
         weight_hint = (
-            f"\nNet weight per pack is **{m_g.group(1)} g**, "
+            f"\nNet weight per pack is **{m.group(1)} g**, "
             "make sure this number is included in the title."
         )
 
-    sys = "You are an e-commerce copywriter."
-    user = (
+    sys_msg = "You are an e-commerce copywriter."
+    user_msg = (
         "English title must contain the exact pcs quantity or weight in grams "
-        "(if present), plus the main size(s) and the material. Do NOT invent "
-        "numbers."
-        + pcs_hint
-        + weight_hint
+        "(if present), plus the main size(s) and the material. Do NOT invent numbers."
+        + pcs_hint + weight_hint
         + "\nGenerate an English title (≤55 chars) and description (≤300 chars) "
         "for the jewelry beads listed below.\nProducts: "
         + "; ".join(names[:20])
         + '\nReturn JSON: {"title":"...", "desc":"..."}'
     )
 
-    for i in range(tries):
+    for i in range(1, tries + 1):
         try:
             rsp = client.chat.completions.create(
                 model=GPT_MODEL,
-                messages=[
-                    {"role": "system", "content": sys},
-                    {"role": "user", "content": user},
-                ],
+                messages=[{"role": "system", "content": sys_msg},
+                          {"role": "user", "content": user_msg}],
                 temperature=0.7,
             )
             data = json.loads(_strip_fence(rsp.choices[0].message.content))
             return data.get("title", "")[:55], data.get("desc", "")[:300]
         except Exception as e:
-            print(f"[GPT] attempt {i+1}/{tries} failed: {e}")
+            print(f"[GPT-retry] Folder {folder_id} attempt {i}/{tries} failed: {e}")
             time.sleep(1.5)
     return "", ""
 
 
-# -------------------- 价格公式 --------------------------------------------------
-def calc_price_usd(max_cost_rmb: float) -> float:
+def calc_price_usd(max_cost_rmb):
     pc = max_cost_rmb or 0
-    p1 = (pc + FF) / (1 - GROSS_MARGIN - COMMISSION)
-    p2 = (TARGET_REV_RMB + pc + FF) / (1 - COMMISSION)
+    # 公式里分母多减一个ACOS费率
+    p1 = (pc + FF) / (1 - GROSS_MARGIN - COMMISSION - ACOS_RATE)
+    p2 = (TARGET_REV_RMB + pc + FF) / (1 - COMMISSION - ACOS_RATE)
     price_rmb = max(p1, p2)
     return max(MIN_PRICE_USD, round(price_rmb * RMB_TO_USD, 2))
 
 
-# -------------------- 选倍数 ----------------------------------------------------
-def choose_multiplier(max_cost_rmb: float, max_try: int = 10) -> tuple[int, float]:
-    multiplier = 1
-    while multiplier <= max_try:
-        price = calc_price_usd(max_cost_rmb * multiplier)
-        if price > MIN_PRICE_USD:
-            return multiplier, price
-        multiplier += 1
-    return multiplier, calc_price_usd(max_cost_rmb * multiplier)
-
-
-# -------------------- 数量 / 克重 放大 ------------------------------------------
-_qty_pat = re.compile(
-    r"(\d+)\s*(pcs?|PCS?|Pc|pc|颗|个|色|colors?|Colors?|g|G|克|grams?)"
-)
-
-
-def adjust_qty(name: str, mult: int) -> str:
-    """把与 pcs / 克 等单位连用的数字 × mult；尺寸 mm 不动"""
-
-    def _repl(m):
-        num = int(m.group(1)) * mult
-        return f"{num}{m.group(2)}"
-
-    return _qty_pat.sub(_repl, name)
-
-
 # -------------------- 生成 products.xlsx ---------------------------------------
-def make_products(
-    prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFrame
-) -> tuple[pd.DataFrame, dict[int, int]]:
-    rows, folder_multi = {}, {}
-    next_id = 10001
-
-    for _, pf in prod_df.iterrows():
-        # 1) option 图里的 SKU
-        tag_mask = (
-            True
-            if OPTION_TAG in (None, "", "all")
-            else (img_df.option_tag == OPTION_TAG)
-        )
-
+def make_products(prod_df, sku_df, img_df):
+    rows, next_id = {}, 10001
+    for pf in tqdm(prod_df.itertuples(), total=len(prod_df), desc="GPT generating"):
+        tag_mask = True if OPTION_TAG == "all" else (img_df.option_tag == OPTION_TAG)
         opt_skus = img_df[
-            (img_df.folder_id == pf.folder_id)
-            & (img_df.img_role == "option")
-            & tag_mask
-            & (img_df.sku_code.notnull())
+            (img_df.folder_id == pf.folder_id) &
+            (img_df.img_role == "option") &
+            tag_mask &
+            (img_df.sku_code.notnull())
         ].sku_code.unique()
 
         if not len(opt_skus):
-            print(f"[⚠] folder {pf.folder_id}: 没有 option 图或 sku_code 为空")
+            print(f"\n[⚠] Folder {pf.folder_id}: no option images")
             continue
 
         subset = sku_df[sku_df.sku_code.isin(opt_skus)]
         if subset.empty:
-            print(f"[⚠] folder {pf.folder_id}: option 图里的 SKU 不在 sku 表")
+            print(f"\n[⚠] Folder {pf.folder_id}: SKUs missing in sku table")
             continue
 
-        # 2) 选倍数 & 售价
-        mult, price_usd = choose_multiplier(subset.cost_price.max())
-        folder_multi[pf.folder_id] = mult
-
-        # 3) 调整数量后再交 GPT
+        price_usd = calc_price_usd(subset.cost_price.max())
         names = subset.product_name.dropna().unique().tolist()
-        if mult > 1:
-            names = [adjust_qty(n, mult) for n in names]
+        title, desc = gpt_title_desc(names, pf.folder_id)
 
-        title, desc = gpt_title_desc(names, mult)
+        print(f"\n[GPT] Folder {pf.folder_id} → {title[:40]}")
 
         rows[next_id] = dict(
             id=next_id,
@@ -271,38 +217,32 @@ def make_products(
 
     df = pd.DataFrame.from_dict(rows, orient="index")
     df.to_excel("products.xlsx", index=False)
-    print(f"[OK] products.xlsx 生成 {len(df)} 行")
-    return df, folder_multi
+    print(f"\n[OK] products.xlsx 生成 {len(df)} 行")
+    return df
 
 
 # -------------------- 生成 images.xlsx -----------------------------------------
-def make_images(
-    prod_df: pd.DataFrame, img_df: pd.DataFrame, folder_multi: dict[int, int]
-) -> None:
+def make_images(prod_df, img_df):
     img_df["abs_path"] = img_df.file_path.apply(
         lambda p: os.path.join(ROOT_PATH, p).replace("\\", "\\")
     )
     grp = img_df.groupby("folder_id")
 
     out_rows, img_idx = [], 1
-    for _, pr in prod_df.iterrows():
+    for pr in tqdm(prod_df.itertuples(), total=len(prod_df), desc="Images assembling"):
         fid = pr.folder_id
         if fid not in grp.groups:
             continue
 
-        mult = folder_multi.get(fid, 1)
         g = grp.get_group(fid)
-
-        main = g[g.img_role == "main"].abs_path.tolist()
+        main   = g[g.img_role == "main"].abs_path.tolist()
         detail = g[g.img_role == "detail"].abs_path.tolist()
-        size = g[g.img_role == "size"].abs_path.tolist()
+        size   = g[g.img_role == "size"].abs_path.tolist()
 
-        tag_mask = (
-            True if OPTION_TAG in (None, "", "all") else (g.option_tag == OPTION_TAG)
-        )
+        tag_mask = True if OPTION_TAG == "all" else (g.option_tag == OPTION_TAG)
         opts = g[(g.img_role == "option") & tag_mask]
 
-        for _, r in opts.iterrows():
+        for r in opts.itertuples():
             pics = [r.abs_path] + main + detail + size
             pics = pics[:10]
 
@@ -312,21 +252,21 @@ def make_images(
                 size="",
                 pack="2",
                 color="",
-                sku=f"{r.sku_code}*{mult}" if mult > 1 else r.sku_code,
+                sku=r.sku_code,
             )
             for i, p in enumerate(pics, 1):
                 row[f"img_path{i}"] = p
             out_rows.append(row)
             img_idx += 1
 
-    out_rows = sorted(out_rows, key=lambda r: (r["product_id"], r["sku"]))
     pd.DataFrame(out_rows).to_excel("images.xlsx", index=False)
     print(f"[OK] images.xlsx   生成 {len(out_rows)} 行")
 
 
 # -------------------- 主程 ------------------------------------------------------
 if __name__ == "__main__":
+    print(f"[INFO] OPTION_TAG = {OPTION_TAG}")
     prod_df, sku_df, img_df = load_data()
-    products_out, folder_multi = make_products(prod_df, sku_df, img_df)
-    make_images(products_out, img_df, folder_multi)
+    products_out = make_products(prod_df, sku_df, img_df)
+    make_images(products_out, img_df)
     print("✅ 全部完成")

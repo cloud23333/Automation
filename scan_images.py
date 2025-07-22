@@ -15,7 +15,7 @@ from os.path import abspath, join, normpath
 EXCEL_PATH = (
     r"\\Desktop-inv4qoc\图片数据\Temu_半托项目组\倒表格\数据\JST_DATA\Single.xlsx"
 )
-ROOT_PATH = r"D:\图片录入测试"
+ROOT_PATH = r"\\Desktop-inv4qoc\图片数据\整理图库"
 
 DB_CFG = dict(
     host="localhost",
@@ -35,17 +35,21 @@ OPTION_TAG_MAP = {
     "不带数量": "noqty",
 }
 
+
 # ---------- 工具 -------------------------------------------------------------
 def normalize_sku(raw: str) -> str:
-    """SKU 编码标准化"""
-    return (
-        ""
-        if raw is None
-        else (raw.strip().replace("_", "*").replace(" ", ""))
+    return "" if raw is None else (
+        raw.strip()
+           .replace("_", "*")
+           .replace(" ", "")
+           .replace("=", "/")
+           .lower()        # 这里统一转成小写
     )
+
 
 def db():  # 连接
     return pymysql.connect(**DB_CFG)
+
 
 # ---------- product_folder ---------------------------------------------------
 def ensure_folder(cur, folder_code, style_name, sku_folder) -> int:
@@ -64,6 +68,7 @@ def ensure_folder(cur, folder_code, style_name, sku_folder) -> int:
     )
     return cur.lastrowid
 
+
 # ---------- option_tag_dict --------------------------------------------------
 def ensure_option_tags(cur):
     cur.execute(
@@ -77,6 +82,7 @@ def ensure_option_tags(cur):
             "INSERT IGNORE INTO option_tag_dict(tag_code,tag_name) VALUES (%s,%s)",
             (code, zh),
         )
+
 
 # ---------- ① Excel → sku ----------------------------------------------------
 def import_sku():
@@ -116,6 +122,7 @@ def import_sku():
             cur.close()
         conn.close()
 
+
 # ---------- ② 扫描图库 -------------------------------------------------------
 def classify(parts, fname):
     """返回 (img_role, option_tag)"""
@@ -128,20 +135,26 @@ def classify(parts, fname):
         return "size", None
     return "main", None
 
+
 def scan_and_link():
     conn, cur = db(), None
     cnt_option = cnt_link = 0
-    not_found_skus = set()  # 用于记录不存在的sku_code
+    not_found_skus = set()          # ← 记录缺失的 sku_code
     try:
         cur = conn.cursor()
         ensure_option_tags(cur)
 
+        # —— NEW: 一次性把现有 sku_code 读进内存 ——————————
+        cur.execute("SELECT sku_code FROM sku")
+        sku_set = {row[0] for row in cur.fetchall()}
+        # ————————————————————————————————————————————————
+
         for root, _, files in os.walk(ROOT_PATH):
             rel_dir = os.path.relpath(root, ROOT_PATH)
-            if rel_dir == ".":  # 跳过根目录
+            if rel_dir == ".":
                 continue
             parts = rel_dir.split(os.sep)
-            if len(parts) < 3:  # 需 ≥ BXG/风格/SKU
+            if len(parts) < 3:
                 continue
 
             folder_id = ensure_folder(cur, *parts[:3])
@@ -155,14 +168,12 @@ def scan_and_link():
                     normalize_sku(os.path.splitext(fn)[0]) if role == "option" else None
                 )
 
-                # 关键：校验sku_code是否存在
-                if sku_code:
-                    cur.execute("SELECT 1 FROM sku WHERE sku_code=%s", (sku_code,))
-                    if cur.fetchone() is None:
-                        not_found_skus.add(sku_code)
-                        sku_code = None
+                # —— NEW: 用集合判断 ——–
+                if sku_code and sku_code not in sku_set:
+                    not_found_skus.add(sku_code)
+                    sku_code = None
+                # ——————————————————
 
-                # 插入/更新 image_asset
                 cur.execute(
                     """
                     INSERT INTO image_asset(folder_id,file_path,img_role,option_tag,sku_code)
@@ -177,7 +188,6 @@ def scan_and_link():
                 if cur.rowcount and role == "option":
                     cnt_option += 1
 
-                # 选项图 → 回填 sku.folder_id
                 if sku_code:
                     cur.execute(
                         """
@@ -208,6 +218,7 @@ def scan_and_link():
         if cur:
             cur.close()
         conn.close()
+
 
 # ---------- 主入口 ------------------------------------------------------------
 if __name__ == "__main__":
