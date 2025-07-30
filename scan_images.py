@@ -1,13 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-import_gallery.py  –  Excel → SKU & 图库扫描
-------------------------------------------------
-1. Excel 三列：商品编码 / 成本价 / 重量   → sku
-2. 扫描目录：深度 >3 为选项图(option)
-   • 归一 ^ → *、× → X
-   • 同路径冲突则 update img_role / option_tag / sku_code
-"""
-
 import os, pandas as pd, pymysql
 from os.path import abspath, join, normpath
 
@@ -88,38 +78,63 @@ def ensure_option_tags(cur):
 def import_sku():
     df = pd.read_excel(
         EXCEL_PATH,
-        usecols=["商品编码", "商品名称", "成本价", "重量"],
+        usecols=["商品编码", "商品名称", "成本价", "重量",
+                 "数量(pcs)", "颜色", "尺寸规格(mm)", "材质"],
         dtype={"商品编码": str},
     )
-    df["成本价"] = pd.to_numeric(df["成本价"], errors="coerce").fillna(0.0)
-    df["重量"] = pd.to_numeric(df["重量"], errors="coerce").fillna(0.0)
+    df["material_desc"] = df["材质"].fillna("").str.strip().replace({"": None, "/": None})
 
-    conn, cur = db(), None
+    # -------- 数值列处理 --------
+    df["成本价"] = pd.to_numeric(df["成本价"], errors="coerce").fillna(0.0)
+    df["重量"]   = pd.to_numeric(df["重量"],   errors="coerce").fillna(0.0)
+
+    # -------- 新增 3 列清洗 --------
+    def clean_txt(x):
+        if pd.isna(x):
+            return None
+        x = str(x).strip()
+        return None if x in ["", "/"] else x
+
+    df["qty_desc"]   = df["数量(pcs)"].apply(clean_txt)
+    df["color_desc"] = df["颜色"].apply(clean_txt)
+    df["size_desc"]  = df["尺寸规格(mm)"].apply(clean_txt)
+
+    conn = db()
+    cur  = conn.cursor()
     try:
-        cur = conn.cursor()
         for _, r in df.iterrows():
             sku = normalize_sku(r["商品编码"])
             if not sku:
                 continue
-            name = str(r["商品名称"]).strip() if pd.notna(r["商品名称"]) else ""
-            cost = float(r["成本价"])
-            wt = float(r["重量"])
             cur.execute(
                 """
-                INSERT INTO sku (sku_code, product_name, cost_price, weight_kg)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO sku
+                  (sku_code, product_name, cost_price, weight_kg,
+                   qty_desc, color_desc, size_desc)
+                VALUES
+                  (%s,%s,%s,%s,%s,%s,%s)
                 ON DUPLICATE KEY UPDATE
-                product_name = VALUES(product_name),
-                cost_price   = VALUES(cost_price),
-                weight_kg    = VALUES(weight_kg)
+                  product_name = VALUES(product_name),
+                  cost_price   = VALUES(cost_price),
+                  weight_kg    = VALUES(weight_kg),
+                  qty_desc     = VALUES(qty_desc),
+                  color_desc   = VALUES(color_desc),
+                  size_desc    = VALUES(size_desc)
                 """,
-                (sku, name, cost, wt),
+                (
+                    sku,
+                    str(r["商品名称"]).strip() if pd.notna(r["商品名称"]) else "",
+                    float(r["成本价"]),
+                    float(r["重量"]),
+                    r["qty_desc"],
+                    r["color_desc"],
+                    r["size_desc"],
+                ),
             )
         conn.commit()
         print(f"[SKU] 导入/更新 {len(df)} 行")
     finally:
-        if cur:
-            cur.close()
+        cur.close()
         conn.close()
 
 
