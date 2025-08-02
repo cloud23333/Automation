@@ -2,7 +2,7 @@ WAIT_SEC = 15
 SLEEP_SHORT = 0.3
 ATTR_TIMEOUT = 3
 
-import os, sys, warnings, logging
+import os,  warnings, logging
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 import pandas as pd
@@ -13,7 +13,6 @@ from selenium.webdriver.support import expected_conditions as EC
 import os, time
 from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
-from collections import defaultdict
 from selenium.common.exceptions import TimeoutException
 from contextlib import suppress
 
@@ -25,8 +24,8 @@ service = Service(log_path=os.devnull)
 warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto")
 logging.getLogger("absl").setLevel(logging.ERROR)
 
-df_products = pd.read_excel(r"C:\Users\Administrator\Documents\Mecrado\Automation\products.xlsx", engine="openpyxl")
-df_images = pd.read_excel(r"C:\Users\Administrator\Documents\Mecrado\Automation\images.xlsx", engine="openpyxl")
+df_products = pd.read_excel(r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\products.xlsx", engine="openpyxl")
+df_images = pd.read_excel(r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\images.xlsx", engine="openpyxl")
 
 def safe_input(xpath, value, clear_first=True):
     try:
@@ -288,13 +287,15 @@ def apply_secondary_images():
 
 driver = webdriver.Chrome(service=service, options=chrome_opts)
 wait = WebDriverWait(driver, WAIT_SEC)
+
+
 try:
     driver.get("https://www.dianxiaomi.com/")
     time.sleep(1)
     wait_present('//*[@id="exampleInputName"]').send_keys("Cloud23333")
     wait_present('//*[@id="exampleInputPassword"]').send_keys("Dzj9876543")
     input("验证码后回车...")
-    time.sleep(5)
+    time.sleep(1)
 
     for _, product_row in df_products.iterrows():
         product_id = product_row["id"]
@@ -308,15 +309,20 @@ try:
             "global_price": str(product_row["global_price"]),
         }
         product_images = df_images[df_images["product_id"] == product_id].copy()
+        product_images = (
+            product_images
+                .sort_values(['color', 'size', 'pack'], ascending=[True, True, True])
+                .reset_index(drop=True)
+        )
         main_sec = product_images.apply(lambda r: (get_img_paths_from_row(r)[0], tuple(get_img_paths_from_row(r)[1:])), axis=1)
         product_images["main"] = main_sec.apply(lambda t: t[0])
         product_images["secondary"] = main_sec.apply(lambda t: t[1])
         sec_lists = product_images["secondary"].unique()
         identical_sec = len(sec_lists) == 1
         common_sec = list(sec_lists[0]) if identical_sec else []
-        sizes = product_images["size"].dropna().unique().tolist()
-        packs = product_images["pack"].dropna().unique().tolist()
-        colors = product_images["color"].dropna().unique().tolist()
+        sizes     = sorted(product_images["size"].dropna().unique())
+        packs     = sorted(product_images["pack"].dropna().unique())
+        colors    = product_images["color"].dropna().unique().tolist()
         varying = [n for n, v in [("sizes", sizes), ("pack", packs), ("color", colors)] if len(v) > 1]
         variants_dict = {
             "sizes": sizes,

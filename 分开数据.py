@@ -1,6 +1,6 @@
 import pandas as pd
 
-df = pd.read_excel(r"D:\下载\JST.xlsx")
+df = pd.read_excel(r"D:\下载\商品资料_20250801171534_99677783_1.xlsx")
 
 # 需要同时检查的列
 cols = ['数量(pcs)', '颜色', '尺寸规格(mm)']

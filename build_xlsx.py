@@ -1,8 +1,12 @@
+# python build_xlsx.py folders.txt
+
 from __future__ import annotations
 import os, sys, re, json, time, argparse
 import pandas as pd, pymysql
 from openai import OpenAI
 from tqdm import tqdm
+
+MAX_DESC_LEN = 3500
 
 DB_CONF = dict(
     host="localhost",
@@ -74,7 +78,7 @@ def load_data(folders: list[tuple[str, str, str]] | None = None):
 
 
 def _clean_title(t: str) -> str:
-    t = re.sub(r"[#\\/+%^*<>$@~`|]", " ", t)
+    t = re.sub(r"[#\\/+%^*<>$@~|]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
     return t[:55]
 
@@ -92,7 +96,12 @@ def _num_range(vals):
 
 
 def _strip_fence(txt: str) -> str:
-    return re.sub(r"^```[\s\S]*?\n|\n?```$", "", txt.strip())
+    txt = txt.strip()
+    if txt.startswith(""):
+        txt = re.sub(r"^[^\n]*\n?", "", txt)
+    if txt.endswith(""):
+        txt = txt[:-3]
+    return txt.strip()
 
 
 def gpt_title_desc(
@@ -104,6 +113,7 @@ def gpt_title_desc(
     material_set,
     tries=3,
 ):
+    parts = []
     qty_txt = _num_range(qty_set)
     size_txt = _num_range(size_set)
     weight_txt = _num_range(weight_set)
@@ -112,31 +122,35 @@ def gpt_title_desc(
 
     hint_parts = []
     if qty_txt:
-        hint_parts.append(f"{qty_txt}pcs")
+        parts.append(f"{qty_txt}pcs")
     elif weight_txt:
-        hint_parts.append(f"{weight_txt}g")
+        parts.append(f"{weight_txt}g")
     if size_txt:
-        hint_parts.append(f"{size_txt}mm")
+        parts.append(f"{size_txt}mm")
     if mat_txt:
-        hint_parts.append(mat_txt)
+        parts.append(mat_txt)
     if color_txt:
-        hint_parts.append(color_txt)
+        parts.append(color_txt)
+    prefix = ", ".join(parts)
 
-    prefix = ", ".join(hint_parts)
+    if prefix:
+        title_rule = f"TITLE must contain: {prefix}, product name."
+    else:
+        title_rule = "TITLE must contain the product name."
 
-    sys_msg = "You are an e‑commerce copywriter."
+    sys_msg = "You are an e-commerce copywriter."
     user_msg = (
-        "Create a concise English product title (≤55 chars incl. spaces) and an English "
-        "bullet‑style description. "
-        "TITLE must contain: " + prefix + ", product name. "
-        "DESCRIPTION template:\n"
-        "• Key material & finish\n"
-        "• Exact size or weight & pack qty\n"
-        "• Suitable DIY uses\n"
-        "• Advantage or assurance\n"
-        "End with: Add to cart today.\n"
-        "No extra symbols, keep punctuation minimal. "
-        'Return JSON: {"title":"...", "desc":"..."}  '
+        "Create a concise English product title (≤55 chars incl. spaces) and an "
+        "detailed English bullet-style description.\n"
+        f"{title_rule}\n"
+        "DESCRIPTION requirements:\n"
+        "• 10-12 bullets, each ≤35 words.\n"
+        "• Cover: material & finish, exact size/weight & pack qty, DIY use cases, "
+        "creative project ideas, benefits, quality assurance, shipping info, "
+        "storage/care tips, brand story, plus a call-to-action.\n"
+        "Finish with: Add to cart today.\n"
+        "No emojis, minimal punctuation.\n"
+        'Return JSON: {"title":"...", "desc":"..."}\n'
         "Products: " + "; ".join(names[:20])
     )
 
@@ -150,14 +164,33 @@ def gpt_title_desc(
                 ],
                 temperature=0.5,
             )
-            data = json.loads(_strip_fence(rsp.choices[0].message.content))
-            title = _clean_title(data.get("title", ""))
-            desc_raw = data.get("desc", "")[:1000]
-            desc = re.sub(r"\s+\n", "\n", desc_raw).strip()
-            return title, desc
-        except Exception:
+            content = _strip_fence(rsp.choices[0].message.content)
+            try:
+                data = json.loads(content)
+                title = _clean_title(data.get("title", ""))
+                desc = re.sub(r"\s+\n", "\n", str(data.get("desc", "")))[
+                    :MAX_DESC_LEN
+                ].strip()
+                if title:
+                    return title, desc  # ← 正常返回
+                print("[warn] GPT 空标题，用降级方案")
+            except Exception as e:
+                print("[warn] JSON 解析失败:", e, content[:120])
+
+        except Exception as e:
+            print("[warn] GPT 接口异常:", e)
             time.sleep(1.5)
-    return "", ""
+    fallback_name = names[0] if names else "Beads"
+    qty_txt = _num_range(qty_set) or ""
+    size_txt = _num_range(size_set) or ""
+    prefix = " ".join(
+        [f"{size_txt}mm" if size_txt else "", f"{qty_txt}pcs" if qty_txt else ""]
+    ).strip()
+    title = _clean_title(f"{prefix} {fallback_name}".strip()) or fallback_name
+    desc = (
+        "Jewelry-making beads. Ideal for DIY crafts and decorations. Add to cart today."
+    )
+    return title, desc
 
 
 def calc_price_usd(max_cost_rmb: float | None) -> float:
@@ -198,14 +231,39 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
 
         price_usd = calc_price_usd(subset.cost_price.max())
         names = subset.product_name.dropna().unique().tolist()
-        title, desc = gpt_title_desc(
+        if not names:
+            names = [pf.sku_folder]
+        title, desc_gpt = gpt_title_desc(
             names, qty_set, size_set, color_set, weight_set, mat_set
         )
+
+        # —— 生成 “尺寸‑数量” 对应行 ——
+        def fmt(v):
+            try:
+                f = float(v)
+                return str(int(f)) if f.is_integer() else str(f)
+            except Exception:
+                return str(v)
+
+        pairs_df = (
+            subset[["size_desc", "qty_desc"]]
+            .dropna()
+            .loc[lambda d: (d.size_desc != "/") & (d.qty_desc != "/")]
+            .assign(size_val=lambda d: pd.to_numeric(d.size_desc, errors="coerce"))
+            .sort_values("size_val", ignore_index=True)
+        )
+
+        mapping_lines = [
+            f"{fmt(r.size_desc)}mm-{fmt(r.qty_desc)}pcs" for _, r in pairs_df.iterrows()
+        ]
+        mapping_text = "\n".join(dict.fromkeys(mapping_lines))
+
+        full_desc = f"{desc_gpt.strip()}\n\nAvailable packs:\n{mapping_text}"
 
         rows[next_id] = dict(
             id=next_id,
             title=title,
-            desc=desc,
+            desc=full_desc,
             global_price=price_usd,
             category="Beads(珠子)",
             attribute="Generic",
@@ -215,7 +273,10 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
         )
         next_id += 1
     df = pd.DataFrame.from_dict(rows, orient="index")
-    df.to_excel("products.xlsx", index=False)
+    df.to_excel(
+        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\products.xlsx",
+        index=False,
+    )
     return df
 
 
@@ -270,7 +331,10 @@ def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFram
     bad_ids = chk[chk.mismatch].product_id.tolist()
     if bad_ids:
         df[df.product_id.isin(bad_ids)].to_excel("variant_mismatch.xlsx", index=False)
-    df.to_excel("images.xlsx", index=False)
+    df.to_excel(
+        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\images.xlsx",
+        index=False,
+    )
 
 
 def main():
