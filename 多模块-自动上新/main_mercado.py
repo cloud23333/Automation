@@ -3,8 +3,8 @@ from selenium.webdriver.support.ui import Select
 import dianxiaomi, mercado, uploader, common, config
 from contextlib import suppress
 
-df_products = pd.read_excel(config.PRODUCTS_XLSX, engine="openpyxl")
-df_images = pd.read_excel(config.IMAGES_XLSX, engine="openpyxl")
+df_products = pd.read_excel(config.Mercado_PRODUCTS_XLSX, engine="openpyxl")
+df_images = pd.read_excel(config.Mercado_IMAGES_XLSX, engine="openpyxl")
 
 driver = dianxiaomi.init_driver()
 try:

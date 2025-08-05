@@ -9,7 +9,7 @@ EXCEL_PATH = (
 
 Mid_pic_folder = r"\\Desktop-inv4qoc\图片数据\1重点图：图片备份\新品临时安置"
 Final_pic_folder = r"\\Desktop-inv4qoc\图片数据\整理图库"
-ROOT_PATH = Mid_pic_folder
+ROOT_PATH = Final_pic_folder
 
 DB_CFG = {
     "host": "localhost",

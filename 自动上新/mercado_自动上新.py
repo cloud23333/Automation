@@ -10,7 +10,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import os, time
+import time
 from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
 from selenium.common.exceptions import TimeoutException
