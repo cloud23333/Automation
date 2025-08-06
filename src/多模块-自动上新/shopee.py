@@ -1,6 +1,5 @@
-import time
 from common import wait_click, wait_present
-import uploader, config
+import config
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from uploader import upload_img_in_one_slot
