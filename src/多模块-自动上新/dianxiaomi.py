@@ -26,4 +26,4 @@ def login(driver):
         config.PASSWORD
     )
     input("验证码后回车...")
-    time.sleep(1)
+
