@@ -272,7 +272,7 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
         next_id += 1
     df = pd.DataFrame.from_dict(rows, orient="index")
     df.to_excel(
-        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\products.xlsx",
+        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\mercado_products.xlsx",
         index=False,
     )
     return df
@@ -329,7 +329,7 @@ def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFram
     if bad_ids:
         df[df.product_id.isin(bad_ids)].to_excel("variant_mismatch.xlsx", index=False)
     df.to_excel(
-        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\images.xlsx",
+        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\mercado_images.xlsx",
         index=False,
     )
 

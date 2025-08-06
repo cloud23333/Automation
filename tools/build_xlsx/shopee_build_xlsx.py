@@ -65,19 +65,14 @@ def build(prod, sku, img):
 
         if pf.folder_id in sg.groups:
             gsku = sg.get_group(pf.folder_id).copy()
-            sizes = sorted(gsku.size_desc.astype(str).unique(), key=lambda x: (len(x), x))
-            base_size = sizes[0]
-            base_colors = gsku[gsku.size_desc.astype(str) == base_size].color_desc.unique().tolist()
-
-            for size in sizes:
-                for color in base_colors:
-                    subset = gsku[(gsku.size_desc.astype(str) == size) & (gsku.color_desc == color)]
-                    if subset.empty:
-                        subset = gsku[(gsku.size_desc.astype(str) == base_size) & (gsku.color_desc == color)]
-                    if subset.empty:
-                        continue
-                    row = subset.iloc[0]
-                    ws_i.append([pid, row.sku_code, size, color, color_img.get(color, "")])
+            for row in gsku.drop_duplicates("sku_code").itertuples():
+                ws_i.append([
+                    pid,
+                    row.sku_code,
+                    row.size_desc,
+                    row.color_desc,
+                    color_img.get(row.color_desc, ""),
+                ])
 
         pid += 1
     return wb
