@@ -14,8 +14,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import ActionChains
 
 
-
-
 def choose_category(driver, title, desc, img_list):
     input_elem = wait_click(driver, '//*[@id="rc_select_0"]')
     input_elem.clear()
@@ -123,9 +121,15 @@ def upload_color_images(driver, df_skus, img_dir):
         driver, '//*[@id="themeImageContainer"]/div[1]/div[2]/div/div/div[1]/a/div/span'
     ).click()
     wait_click(driver, '//span[contains(text(),"批量传图")]').click()
-    select_img_el = wait_click(driver, '//button[contains(@class,"ant-btn-primary") and .//span[text()="选择图片"]]')
+    select_img_el = wait_click(
+        driver,
+        '//button[contains(@class,"ant-btn-primary") and .//span[text()="选择图片"]]',
+    )
     ActionChains(driver).move_to_element(select_img_el).perform()
-    local_img_els = driver.find_elements(By.XPATH, '//span[@class="ant-dropdown-menu-title-content" and text()="本地图片"]')
+    local_img_els = driver.find_elements(
+        By.XPATH,
+        '//span[@class="ant-dropdown-menu-title-content" and text()="本地图片"]',
+    )
     for tag in local_img_els:
         if tag.is_displayed():
             tag.click()
