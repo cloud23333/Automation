@@ -3,19 +3,16 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 import os, warnings, logging, time
 import config, common
-from selenium.webdriver import ChromeOptions, Chrome, ChromeService
 
 
 def init_driver():
-    chrome_opts = ChromeOptions()
-    chrome_opts.binary_location = r"chrome\chrome.exe"
-    chrome_opts.add_argument(r"--user-data-dir=chrome\User Data")
+    chrome_opts = Options()
     chrome_opts.add_argument("--log-level=3")
     chrome_opts.add_experimental_option("excludeSwitches", ["enable-logging"])
-    service = ChromeService(executable_path=r"chrome\chromedriver.exe")
+    service = Service(log_path=os.devnull)
     warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto")
     logging.getLogger("absl").setLevel(logging.ERROR)
-    driver = Chrome(service=service, options=chrome_opts)
+    driver = webdriver.Chrome(service=service, options=chrome_opts)
     return driver
 
 
