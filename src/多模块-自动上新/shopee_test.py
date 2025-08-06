@@ -10,7 +10,7 @@ def main():
         driver.get("https://www.dianxiaomi.com/web/shopeeGlobal/add")
         wait_present(driver, '//*[@id="basicInfo"]', timeout=1)
         import pandas as pd
-        df = pd.read_excel(config.Shopee_products, engine="openpyxl")
+        df = pd.read_excel(config.SHOPEE_PRODUCTS_XLSX, engine="openpyxl")
         row = df.iloc[0]
         title = row['title']
         desc = row['desc']
