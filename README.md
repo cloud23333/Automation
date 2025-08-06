@@ -5,18 +5,17 @@ Scripts and utilities for automating product uploads and data preparation for e-
 
 ## Prerequisites
 - Python 3.11+
-- Google Chrome with a matching ChromeDriver in your PATH
-- Packages: `selenium`, `pandas`, `pywinauto`, `openpyxl`
+- Google Chrome (ChromeDriver is handled automatically and cached locally)
+- Packages: `selenium`, `pandas`, `pywinauto`, `openpyxl`, `webdriver-manager`
 - Windows environment for GUI automation
 
 ## Setup
 1. Clone this repository.
 2. Install the required packages:
    ```bash
-   pip install selenium pandas pywinauto openpyxl
+   pip install selenium pandas pywinauto openpyxl webdriver-manager
    ```
 3. Place the necessary Excel files inside the `数据/` directory.
-4. Ensure ChromeDriver is accessible from the command line.
 
 ## Folder Structure
 - `src/` – core automation scripts for uploading products
@@ -27,6 +26,18 @@ Scripts and utilities for automating product uploads and data preparation for e-
 The automation scripts expect product and image information in Excel spreadsheets located in `数据/`. Typical files include:
 - `mercado_products.xlsx` and `mercado_images.xlsx` for Mercado uploads
 - `shopee_products.xlsx` for Shopee listings
+
+## ChromeDriver Caching
+On the first run, the scripts download a matching ChromeDriver into the
+repository's `drivers/` directory and reuse it on subsequent runs. To use a
+custom driver path, set the `CHROME_DRIVER_PATH` environment variable before
+launching a script:
+
+```bash
+export CHROME_DRIVER_PATH=/path/to/chromedriver  # Linux/macOS
+set CHROME_DRIVER_PATH=C:\path\to\chromedriver.exe  # Windows
+```
+
 
 ## Example Usage
 Run a single-file Mercado upload script:
