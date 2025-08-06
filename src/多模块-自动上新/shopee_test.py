@@ -26,6 +26,11 @@ def main():
         img_list = [row[c] for c in df.columns if c.startswith("img") and pd.notna(row[c])]
         shopee.choose_category(driver, title, desc, img_list)
         shopee.fill_sku_table(driver, row["product_id"], df_skus)
+        shopee.upload_color_images(
+            driver,
+            df_skus[df_skus["product_id"] == row["product_id"]],
+            config.SHOPEE_PRODUCTS_XLSX,
+        )
         input("表单已填，回车结束测试...")
     finally:
         driver.quit()

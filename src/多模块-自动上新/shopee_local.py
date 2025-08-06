@@ -92,11 +92,37 @@ def fill_sku_table(driver, product_id, df_skus):
         '//textarea[contains(@class,"ant-input") and @placeholder="请将Excel内容粘贴到此处"]',
     )
     textarea.click()
+
     pyautogui.hotkey("ctrl", "v")
 
     wait_click(
         driver, "/html/body/div[14]/div/div[2]/div/div[2]/div[3]/button[2]"
     ).click()
+
+def upload_color_images(driver, df_skus, img_dir):
+    if df_skus.empty:
+        return
+    imgs = []
+    for color, g in df_skus.groupby("color"):
+        g = g.sort_values("size")
+        row = g.iloc[0]
+        if pd.notna(row.get("img_path")):
+            path = os.path.join(img_dir, row["img_path"])
+            if os.path.exists(path):
+                imgs.append(path)
+
+    下拉菜单：//*[@id="themeImageContainer"]/div[1]/div[2]/div/div/div[1]/a/div/span
+    选择：<li class="ant-dropdown-menu-item ant-dropdown-menu-item-only-child" aria-disabled="false" role="menuitem" tabindex="-1"><!----><span class="ant-dropdown-menu-title-content"><div class="ant-flex css-l74pc ant-flex-align-center ant-flex-justify-space-between"><span>批量传图</span><!----></div></span></li>
+    循环：
+        下拉菜单：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[2]/button
+        点击：/html/body/div[26]/div/div/ul/li[1]/span
+        上传颜色图片
+        点击：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[2]/div/div[1]/img
+        下拉菜单：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[3]/button
+        点击：/html/body/div[26]/div/div/ul/li[1]/span
+        上传颜色图片
+        点击：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[2]/div/div[2]/img
+        。。。
 
 def run(driver):
     df_products = pd.read_excel(
@@ -115,4 +141,3 @@ def run(driver):
         ]
         choose_category(driver, title, desc, img_list)
         fill_sku_table(driver, row["product_id"], df_skus)
-        upload_color_images(driver, df_skus[df_skus["product_id"] == row["product_id"]], config.SHOPEE_IMAGE_DIR)
