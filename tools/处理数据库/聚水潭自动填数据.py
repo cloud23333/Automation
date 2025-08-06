@@ -3,17 +3,14 @@ import pandas as pd
 from pathlib import Path
 import numpy as np
 
-# ────────── 1. 读取原始表 ──────────
 src_path = Path(r"C:\Users\Administrator\Documents\Mecrado\Automation\没好.xlsx")
 df = pd.read_excel(src_path)
 
-# ────────── 2. 确保关键列存在 ──────────
 key_cols = ["数量(pcs)", "颜色", "尺寸规格(mm)"]
 for col in key_cols:
     if col not in df.columns:
         df[col] = np.nan
 
-# ────────── 3. 正则与安全转换函数 ──────────
 qty_name_pat = re.compile(r"(\d+)\s*(?:pcs|颗|个)", re.I)
 qty_code_pat = re.compile(r"-(\d+)\s*pcs",               re.I)
 size_pat      = re.compile(r"(\d+(?:\.\d+)?)\s*mm",      re.I)
