@@ -8,7 +8,11 @@ from uploader import upload_img_in_one_slot
 import pandas as pd
 import pyperclip
 import pyautogui
-import time
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
 
 
 def choose_category(driver, title, desc, img_list):
@@ -99,6 +103,7 @@ def fill_sku_table(driver, product_id, df_skus):
         driver, "/html/body/div[14]/div/div[2]/div/div[2]/div[3]/button[2]"
     ).click()
 
+
 def upload_color_images(driver, df_skus, img_dir):
     if df_skus.empty:
         return
@@ -110,19 +115,17 @@ def upload_color_images(driver, df_skus, img_dir):
             path = os.path.join(img_dir, row["img_path"])
             if os.path.exists(path):
                 imgs.append(path)
+    if not imgs:
+        return
 
-    下拉菜单：//*[@id="themeImageContainer"]/div[1]/div[2]/div/div/div[1]/a/div/span
-    选择：<li class="ant-dropdown-menu-item ant-dropdown-menu-item-only-child" aria-disabled="false" role="menuitem" tabindex="-1"><!----><span class="ant-dropdown-menu-title-content"><div class="ant-flex css-l74pc ant-flex-align-center ant-flex-justify-space-between"><span>批量传图</span><!----></div></span></li>
-    循环：
-        下拉菜单：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[2]/button
-        点击：/html/body/div[26]/div/div/ul/li[1]/span
-        上传颜色图片
-        点击：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[2]/div/div[1]/img
-        下拉菜单：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[3]/button
-        点击：/html/body/div[26]/div/div/ul/li[1]/span
-        上传颜色图片
-        点击：/html/body/div[25]/div/div[2]/div/div[2]/div[2]/div/div[1]/div/div[2]/div/div[2]/img
-        。。。
+    wait_click(
+        driver, '//*[@id="themeImageContainer"]/div[1]/div[2]/div/div/div[1]/a/div/span'
+    ).click()
+    wait_click(driver, '//span[contains(text(),"批量传图")]').click()
+    wait_click(driver, '//button[contains(@class,"ant-btn-primary") and .//span[text()="选择图片"]]').click()
+    wait_click(driver, '//li[@data-menu-id="local" and .//span[text()="本地图片"]]').click()
+
+    
 
 def run(driver):
     df_products = pd.read_excel(
