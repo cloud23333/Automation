@@ -1,3 +1,4 @@
+import time
 from common import wait_click, wait_present
 import uploader, config
 from selenium.webdriver.common.keys import Keys
@@ -37,9 +38,9 @@ def choose_category(driver, title, desc, img_list):
     )
 
 def run(driver):
-    df_products = pd.read_excel(config.SHOPEE_PRODUCTS_XLSX, engine="openpyxl")
-    row = df_products.iloc[0]
-    title = row['title']
-    desc = row['desc']
-    img_list = [row[c] for c in df_products.columns if c.startswith('img') and pd.notna(row[c])]
-    choose_category(driver, title, desc, img_list)
+    df_products = pd.read_excel(config.Shopee_products, engine="openpyxl")
+    for _, row in df_products.iterrows():
+        title = row['title']
+        desc = row['desc']
+        img_list = [row[c] for c in df_products.columns if c.startswith('img') and pd.notna(row[c])]
+        choose_category(driver, title, desc, img_list)

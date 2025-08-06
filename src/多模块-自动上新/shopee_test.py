@@ -8,7 +8,7 @@ def main():
     try:
         dianxiaomi.login(driver)
         driver.get("https://www.dianxiaomi.com/web/shopeeGlobal/add")
-        wait_present(driver, '//*[@id="basicInfo"]')
+        wait_present(driver, '//*[@id="basicInfo"]', timeout=15)
         import pandas as pd
         df = pd.read_excel(config.SHOPEE_PRODUCTS_XLSX, engine="openpyxl")
         row = df.iloc[0]
