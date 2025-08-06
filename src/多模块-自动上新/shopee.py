@@ -37,7 +37,7 @@ def choose_category(driver, title, desc, img_list):
     )
 
 def run(driver):
-    df_products = pd.read_excel(config.Shopee_products, engine="openpyxl")
+    df_products = pd.read_excel(config.SHOPEE_PRODUCTS_XLSX, engine="openpyxl")
     row = df_products.iloc[0]
     title = row['title']
     desc = row['desc']

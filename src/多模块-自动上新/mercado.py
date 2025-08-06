@@ -217,8 +217,8 @@ def get_img_paths_from_row(row):
     return res
 
 def run(driver):
-    df_products = pd.read_excel(config.Mercado_PRODUCTS_XLSX, engine="openpyxl")
-    df_images = pd.read_excel(config.Mercado_IMAGES_XLSX, engine="openpyxl")
+    df_products = pd.read_excel(config.MERCADO_PRODUCTS_XLSX, engine="openpyxl")
+    df_images = pd.read_excel(config.MERCADO_IMAGES_XLSX, engine="openpyxl")
 
     driver = dianxiaomi.init_driver()
     try:
@@ -312,7 +312,6 @@ def run(driver):
             time.sleep(config.SLEEP_SHORT)
 
         input("全部产品上传完毕，回车退出...")
-
     finally:
         with suppress(Exception):
             driver.quit()
