@@ -123,9 +123,8 @@ def upload_color_images(driver, df_skus, img_dir):
         driver, '//*[@id="themeImageContainer"]/div[1]/div[2]/div/div/div[1]/a/div/span'
     ).click()
     wait_click(driver, '//span[contains(text(),"批量传图")]').click()
-    select_img_el = wait_click(driver, '//button[contains(@class,"ant-btn-primary") and .//span[text()="选择图片"]]')#css  .upload-wrap button
+    select_img_el = wait_click(driver, '//button[contains(@class,"ant-btn-primary") and .//span[text()="选择图片"]]')
     ActionChains(driver).move_to_element(select_img_el).perform()
-    # wait_click(driver, '//span[@class="ant-dropdown-menu-title-content" and text()="本地图片"]').click()
     local_img_els = driver.find_elements(By.XPATH, '//span[@class="ant-dropdown-menu-title-content" and text()="本地图片"]')
     for tag in local_img_els:
         if tag.is_displayed():
