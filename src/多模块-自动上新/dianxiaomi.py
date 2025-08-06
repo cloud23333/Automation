@@ -19,14 +19,11 @@ def init_driver():
 def login(driver):
     driver.get("https://www.dianxiaomi.com/")
     time.sleep(1)
-    username = config.USERNAME
-    password = config.PASSWORD
-    if not username or not password:
-        raise RuntimeError(
-            "Environment variables DXM_USERNAME and DXM_PASSWORD must be set"
-        )
-
-    common.wait_present(driver, '//*[@id="exampleInputName"]').send_keys(username)
-    common.wait_present(driver, '//*[@id="exampleInputPassword"]').send_keys(password)
+    common.wait_present(driver, '//*[@id="exampleInputName"]').send_keys(
+        config.USERNAME
+    )
+    common.wait_present(driver, '//*[@id="exampleInputPassword"]').send_keys(
+        config.PASSWORD
+    )
     input("验证码后回车...")
     time.sleep(1)
