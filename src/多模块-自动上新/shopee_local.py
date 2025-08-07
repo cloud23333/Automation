@@ -8,9 +8,6 @@ from uploader import upload_img_in_one_slot
 import pandas as pd
 import pyperclip
 import pyautogui
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import ActionChains
 
 

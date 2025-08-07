@@ -2,3 +2,5 @@
 /dist
 /自动转换文件名.spec
 src/多模块-自动上新/chrome/
+__pycache__/
+*.py[cod]

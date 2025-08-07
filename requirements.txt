@@ -1,0 +1,11 @@
+selenium
+pandas
+pywinauto
+openpyxl
+webdriver-manager
+pyperclip
+pyautogui
+pymysql
+openai
+tqdm
+numpy
