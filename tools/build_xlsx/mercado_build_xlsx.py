@@ -5,7 +5,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 TXT_PATH = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\build_xlsx\txt文件\mercado_folders.txt"
-OUT_DIR  = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据"
+OUT_DIR = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据"
 
 MAX_DESC_LEN = 3500
 
@@ -30,12 +30,15 @@ client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 
 _name_cache: dict[str, str] = {}
 
+
 def db():
     return pymysql.connect(**DB_CONF)
+
 
 def parse_folder_path(path: str):
     m = re.search(r"整理图库\\([^\\]+)\\([^\\]+)\\([^\\]+)$", path.strip())
     return m.groups() if m else None
+
 
 def load_data(folders: list[tuple[str, str, str]] | None = None):
     conn = db()
@@ -76,12 +79,14 @@ def load_data(folders: list[tuple[str, str, str]] | None = None):
     img["sku_code"] = img.sku_code.str.upper()
     return prod, sku, img
 
+
 def _clean_title(t: str) -> str:
     t = re.sub(r"[#\\/+%^*<>$@~|]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
     t = t[:55]
     t = re.sub(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]", "", t)
     return t.strip()
+
 
 def _num_range(vals):
     nums = []
@@ -94,6 +99,7 @@ def _num_range(vals):
     mn, mx = min(nums), max(nums)
     return f"{mn}-{mx}" if mn != mx else str(mn)
 
+
 def _strip_fence(txt: str) -> str:
     txt = txt.strip()
     if txt.startswith(""):
@@ -101,6 +107,7 @@ def _strip_fence(txt: str) -> str:
     if txt.endswith(""):
         txt = txt[:-3]
     return txt.strip()
+
 
 def translate_names(names: list[str]) -> list[str]:
     todo = [n for n in names if n not in _name_cache]
@@ -112,7 +119,8 @@ def translate_names(names: list[str]) -> list[str]:
                 {"role": "system", "content": "You are a translator."},
                 {
                     "role": "user",
-                    "content": "Translate the following Chinese product names to concise natural English, keep the order, separate each with ' | ' only: " + prompt,
+                    "content": "Translate the following Chinese product names to concise natural English, keep the order, separate each with ' | ' only: "
+                    + prompt,
                 },
             ],
             temperature=0,
@@ -121,6 +129,7 @@ def translate_names(names: list[str]) -> list[str]:
         for zh, en in zip(todo, outs):
             _name_cache[zh] = en or zh
     return [_name_cache.get(n, n) for n in names]
+
 
 def gpt_title_desc(
     names,
@@ -197,8 +206,11 @@ def gpt_title_desc(
         [f"{size_txt}mm" if size_txt else "", f"{qty_txt}pcs" if qty_txt else ""]
     ).strip()
     title = _clean_title(f"{prefix} {fallback_name}".strip()) or fallback_name
-    desc = "Jewelry-making beads. Ideal for DIY crafts and decorations. Add to cart today."
+    desc = (
+        "Jewelry-making beads. Ideal for DIY crafts and decorations. Add to cart today."
+    )
     return title, desc
+
 
 def calc_price_usd(max_cost_rmb: float | None) -> float:
     pc = max_cost_rmb or 0
@@ -206,6 +218,7 @@ def calc_price_usd(max_cost_rmb: float | None) -> float:
     p2 = (TARGET_REV_RMB + pc + FF) / (1 - COMMISSION - ACOS_RATE)
     price_rmb = max(p1, p2)
     return max(MIN_PRICE_USD, round(price_rmb * RMB_TO_USD, 2))
+
 
 def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFrame):
     rows, next_id = {}, 10001
@@ -236,16 +249,18 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
         price_usd = calc_price_usd(subset.cost_price.max())
         names_raw = subset.product_name.dropna().unique().tolist() or [pf.sku_folder]
         names = translate_names(names_raw)
-        fallback_name = names[0] 
+        fallback_name = names[0]
         title, desc_gpt = gpt_title_desc(
             names, qty_set, size_set, color_set, weight_set, mat_set
         )
+
         def fmt(v):
             try:
                 f = float(v)
                 return str(int(f)) if f.is_integer() else str(f)
             except Exception:
                 return str(v)
+
         pairs_df = (
             subset[["size_desc", "qty_desc"]]
             .dropna()
@@ -276,6 +291,7 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
         index=False,
     )
     return df
+
 
 def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFrame):
     attr_map = (
@@ -333,6 +349,7 @@ def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFram
         index=False,
     )
 
+
 def main():
     folder_tuples: list[tuple[str, str, str]] | None = None
     if not os.path.isfile(TXT_PATH):
@@ -352,6 +369,7 @@ def main():
     products_out = make_products(prod_df, sku_df, img_df)
     make_images(products_out, img_df, sku_df)
     print("✅ 全部完成")
+
 
 if __name__ == "__main__":
     main()
