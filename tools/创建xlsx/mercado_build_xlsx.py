@@ -3,6 +3,7 @@ import os, sys, re, json, time
 import pandas as pd, pymysql
 from openai import OpenAI
 from tqdm import tqdm
+from collections import defaultdict
 
 TXT_PATH = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\txt文件\mercado_folders.txt"
 OUT_DIR = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据"
@@ -29,6 +30,7 @@ RMB_TO_USD, MIN_PRICE_USD = 0.13927034, 4.0
 client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 
 _name_cache: dict[str, str] = {}
+_color_cache: dict[str, str] = {}
 
 
 def db():
@@ -129,6 +131,28 @@ def translate_names(names: list[str]) -> list[str]:
         for zh, en in zip(todo, outs):
             _name_cache[zh] = en or zh
     return [_name_cache.get(n, n) for n in names]
+
+
+def translate_colors(colors: list[str]) -> list[str]:
+    todo = [c for c in colors if c not in _color_cache]
+    if todo:
+        prompt = " | ".join(todo)
+        rsp = client.chat.completions.create(
+            model=GPT_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a translator."},
+                {
+                    "role": "user",
+                    "content": "Translate the following Chinese color names to concise natural English, keep the order, separate each with ' | ' only: "
+                    + prompt,
+                },
+            ],
+            temperature=0,
+        )
+        outs = [x.strip() for x in rsp.choices[0].message.content.split("|")]
+        for zh, en in zip(todo, outs):
+            _color_cache[zh] = en or zh
+    return [_color_cache.get(c, c) for c in colors]
 
 
 def gpt_title_desc(
@@ -294,13 +318,17 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
 
 
 def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFrame):
+    unique_colors = sku_df.color_desc.dropna().unique().tolist()
+    color_trans = dict(zip(unique_colors, translate_colors(unique_colors)))
+    sku_df["color_en"] = sku_df.color_desc.map(color_trans)
     attr_map = (
-        sku_df[["sku_code", "qty_desc", "color_desc", "size_desc"]]
+        sku_df[["sku_code", "qty_desc", "color_en", "size_desc"]]
         .set_index("sku_code")
         .to_dict(orient="index")
     )
     grp = img_df.groupby("folder_id")
     out_rows, img_idx = [], 1
+    color_used: defaultdict[tuple[int, str, str], int] = defaultdict(int)
     for pr in tqdm(prod_df.itertuples(), total=len(prod_df), desc="Images assembling"):
         fid = pr.folder_id
         if fid not in grp.groups:
@@ -322,12 +350,18 @@ def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFram
             pics = [r.file_path] + main + detail + size_pic
             pics = pics[:10]
             attr = attr_map.get(r.sku_code, {})
+            size_val = attr.get("size_desc", "") or ""
+            base_color = attr.get("color_en", "") or ""
+            key = (pr.id, size_val, base_color)
+            cnt = color_used[key]
+            color_out = base_color if cnt == 0 else f"{base_color} {cnt + 1}"
+            color_used[key] += 1
             row = dict(
                 id=img_idx,
                 product_id=pr.id,
-                size=attr.get("size_desc", "") or "",
+                size=size_val,
                 pack="2",
-                color=attr.get("color_desc", "") or "",
+                color=color_out,
                 qty=attr.get("qty_desc", "") or "",
                 sku=r.sku_code,
             )
