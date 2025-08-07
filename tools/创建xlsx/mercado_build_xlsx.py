@@ -4,7 +4,7 @@ import pandas as pd, pymysql
 from openai import OpenAI
 from tqdm import tqdm
 
-TXT_PATH = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\build_xlsx\txt文件\mercado_folders.txt"
+TXT_PATH = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\txt文件\mercado_folders.txt"
 OUT_DIR = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据"
 
 MAX_DESC_LEN = 3500
@@ -278,7 +278,7 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
             title=title,
             desc=full_desc,
             global_price=price_usd,
-            category="Beads(珠子)",
+            category="Beads",
             attribute="Generic",
             attr_value="Beads",
             folder_id=pf.folder_id,

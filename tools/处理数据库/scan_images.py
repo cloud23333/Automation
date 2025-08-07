@@ -92,19 +92,23 @@ def ensure_option_tags(cur):
 def import_sku(logger: logging.Logger):
     df = (
         pd.read_excel(EXCEL_PATH, sheet_name=0)
-          .rename(columns=lambda x: str(x).strip())
-          .astype({"商品编码": str})
+        .rename(columns=lambda x: str(x).strip())
+        .astype({"商品编码": str})
     )
 
     df["商品编码"] = (
-        df["商品编码"]
-        .str.strip()
-        .str.replace(r"\.0$", "", regex=True)                # 去掉 .0
+        df["商品编码"].str.strip().str.replace(r"\.0$", "", regex=True)  # 去掉 .0
     )
 
     use = [
-        "商品编码", "商品名称", "成本价", "重量",
-        "数量(pcs)", "颜色", "尺寸规格(mm)", "材质"
+        "商品编码",
+        "商品名称",
+        "成本价",
+        "重量",
+        "数量(pcs)",
+        "颜色",
+        "尺寸规格(mm)",
+        "材质",
     ]
     df = df[use]
 
@@ -112,7 +116,7 @@ def import_sku(logger: logging.Logger):
         df["材质"].fillna("").str.strip().replace({"": None, "/": None})
     )
     df["成本价"] = pd.to_numeric(df["成本价"], errors="coerce").fillna(0.0)
-    df["重量"]  = pd.to_numeric(df["重量"],  errors="coerce").fillna(0.0)
+    df["重量"] = pd.to_numeric(df["重量"], errors="coerce").fillna(0.0)
 
     def clean(x):
         if pd.isna(x):
@@ -120,21 +124,24 @@ def import_sku(logger: logging.Logger):
         x = str(x).strip()
         return None if x in ("", "/") else x
 
-    df["qty_desc"]  = df["数量(pcs)"].apply(clean)
+    df["qty_desc"] = df["数量(pcs)"].apply(clean)
     df["color_desc"] = df["颜色"].apply(clean)
-    df["size_desc"]  = df["尺寸规格(mm)"].apply(clean)
+    df["size_desc"] = df["尺寸规格(mm)"].apply(clean)
 
     conn = db()
-    cur  = conn.cursor()
+    cur = conn.cursor()
     data = [
         (
             normalize_sku(r["商品编码"]),
             r["商品名称"].strip() if pd.notna(r["商品名称"]) else "",
             float(r["成本价"]),
             float(r["重量"]),
-            r["qty_desc"], r["color_desc"], r["size_desc"]
+            r["qty_desc"],
+            r["color_desc"],
+            r["size_desc"],
         )
-        for _, r in df.iterrows() if normalize_sku(r["商品编码"])
+        for _, r in df.iterrows()
+        if normalize_sku(r["商品编码"])
     ]
     cur.executemany(
         """
@@ -150,7 +157,7 @@ def import_sku(logger: logging.Logger):
           color_desc   = VALUES(color_desc),
           size_desc    = VALUES(size_desc)
         """,
-        data
+        data,
     )
     conn.commit()
     logger.info("SKU 导入/更新 %d 行", len(data))
@@ -259,7 +266,7 @@ def init_logger():
 
 
 def main():
-    
+
     logger = init_logger()
     truncate_tables()
     import_sku(logger)

@@ -6,7 +6,7 @@ from openpyxl import Workbook
 
 DATA_DIR = Path(r"C:\Users\Administrator\Documents\Mecrado\Automation\数据")
 SHOPEE_PRODUCTS_XLSX = Path(os.getenv("SHOPEE_PRODUCTS_XLSX", DATA_DIR / "shopee_products.xlsx"))
-SHOPEE_FOLDER_TXT = Path(r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\build_xlsx\txt文件\shopee_folders.txt")
+SHOPEE_FOLDER_TXT = Path(r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\txt文件\shopee_folders.txt")
 LOG_FILE = Path(os.getenv("SHOPEE_BUILD_LOG", DATA_DIR / "shopee_build.log"))
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
