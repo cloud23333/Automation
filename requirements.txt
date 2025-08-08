@@ -9,3 +9,4 @@ pymysql
 openai
 tqdm
 numpy
+xlsxwriter
