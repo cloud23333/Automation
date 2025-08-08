@@ -22,7 +22,7 @@ DEEPSEEK_API_KEY = "sk-c73cba2525b74adbb76c271fc7080857"
 GPT_MODEL = "deepseek-chat"
 OPTION_TAG = "qty"
 
-FF, COMMISSION, ACOS_RATE = 4.2, 0.08, 0.35
+FF, COMMISSION, ACOS_RATE = 4.2, 0.08, 0.350
 GROSS_MARGIN, TARGET_REV_RMB = 0.20, 0.0
 RMB_TO_USD, MIN_PRICE_USD = 0.13927034, 4.0
 
@@ -249,6 +249,7 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
         price_usd = calc_price_usd(subset.cost_price.max())
         names_raw = subset.product_name.dropna().unique().tolist() or [pf.sku_folder]
         names = translate_names(names_raw)
+        fallback_name = names[0]
         title, desc_gpt = gpt_title_desc(
             names, qty_set, size_set, color_set, weight_set, mat_set
         )
