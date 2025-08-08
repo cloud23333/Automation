@@ -3,6 +3,14 @@ import os, sys, re, json, time
 import pandas as pd, pymysql
 from openai import OpenAI
 from tqdm import tqdm
+from sqlalchemy import create_engine, text
+
+ENGINE = create_engine(
+    "mysql+pymysql://root:123456@localhost/temu_gallery?charset=utf8mb4",
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    future=True,
+)
 
 TXT_PATH = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\txt文件\mercado_folders.txt"
 OUT_DIR = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据"
@@ -41,40 +49,39 @@ def parse_folder_path(path: str):
 
 
 def load_data(folders: list[tuple[str, str, str]] | None = None):
-    conn = db()
-    try:
+    with ENGINE.begin() as conn:
         base_sql = """
             SELECT pf.id AS folder_id, pf.folder_code, pf.style_name, pf.sku_folder
-            FROM   product_folder pf
-            WHERE  1=1
+            FROM product_folder pf
+            WHERE 1=1
         """
-        params: list[str] = []
+        params = {}
         if folders:
             conds = []
-            for fc, sn, sf in folders:
-                conds.append(
-                    "(pf.folder_code=%s AND pf.style_name=%s AND pf.sku_folder=%s)"
-                )
-                params += [fc, sn, sf]
+            for i, (fc, sn, sf) in enumerate(folders):
+                conds.append(f"(pf.folder_code=:fc{i} AND pf.style_name=:sn{i} AND pf.sku_folder=:sf{i})")
+                params.update({f"fc{i}": fc, f"sn{i}": sn, f"sf{i}": sf})
             base_sql += " AND (" + " OR ".join(conds) + ")"
         else:
-            base_sql += """
-              AND pf.folder_code = 'MN-玛瑙'
-              AND pf.style_name  = '风格1'
-            """
-        prod = pd.read_sql(base_sql, conn, params=params)
+            base_sql += " AND pf.folder_code = 'MN-玛瑙' AND pf.style_name = '风格1'"
+
+        prod = pd.read_sql(text(base_sql), conn, params=params)
         sku = pd.read_sql(
-            "SELECT sku_code, product_name, cost_price, weight_kg, folder_id, "
-            "qty_desc, color_desc, size_desc, material_desc FROM sku",
+            text("""
+                SELECT sku_code, product_name, cost_price, weight_kg, folder_id,
+                       qty_desc, color_desc, size_desc, material_desc
+                FROM sku
+            """),
             conn,
         )
         img = pd.read_sql(
-            "SELECT folder_id, file_path, img_role, option_tag, sku_code "
-            "FROM image_asset",
+            text("""
+                SELECT folder_id, file_path, img_role, option_tag, sku_code
+                FROM image_asset
+            """),
             conn,
         )
-    finally:
-        conn.close()
+
     sku["sku_code"] = sku.sku_code.str.upper()
     img["sku_code"] = img.sku_code.str.upper()
     return prod, sku, img
@@ -107,6 +114,43 @@ def _strip_fence(txt: str) -> str:
     if txt.endswith(""):
         txt = txt[:-3]
     return txt.strip()
+
+
+_color_cache: dict[str, str] = {}
+
+def translate_colors(colors: list[str]) -> list[str]:
+    todo = [c for c in colors if c not in _color_cache]
+    if todo:
+        joined = " | ".join(todo)
+        rsp = client.chat.completions.create(
+            model=GPT_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a translator."},
+                {"role": "user", "content": "Translate these Chinese color names to standard concise English color terms only, keep order, separated by ' | ': " + joined},
+            ],
+            temperature=0,
+        )
+        out_raw = rsp.choices[0].message.content or ""
+        outs = [x.strip() for x in out_raw.split("|")]
+        if len(outs) < len(todo):
+            outs += todo[len(outs):]
+        for zh, en in zip(todo, outs):
+            _color_cache[zh] = en or zh
+    return [_color_cache.get(c, c) for c in colors]
+
+def build_color_map_for_folder(sku_df: pd.DataFrame, folder_id: int) -> dict:
+    sub = sku_df[sku_df.folder_id == folder_id][["size_desc","color_desc"]].dropna()
+    sub = sub.loc[(sub.size_desc != "/")]
+    sub = sub.assign(size_val=pd.to_numeric(sub.size_desc, errors="coerce")).dropna(subset=["size_val"])
+    if sub.empty:
+        return {}
+    min_size = sub.size_val.min()
+    base = sub[sub.size_val == min_size]
+    colors = base.color_desc.dropna().astype(str).unique().tolist()
+    if not colors:
+        return {}
+    colors_en = translate_colors(colors)
+    return dict(zip(colors, colors_en))
 
 
 def translate_names(names: list[str]) -> list[str]:
@@ -295,7 +339,7 @@ def make_products(prod_df: pd.DataFrame, sku_df: pd.DataFrame, img_df: pd.DataFr
 
 def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFrame):
     attr_map = (
-        sku_df[["sku_code", "qty_desc", "color_desc", "size_desc"]]
+        sku_df[["sku_code", "qty_desc", "color_desc", "size_desc", "folder_id"]]
         .set_index("sku_code")
         .to_dict(orient="index")
     )
@@ -309,45 +353,96 @@ def make_images(prod_df: pd.DataFrame, img_df: pd.DataFrame, sku_df: pd.DataFram
         main = g[g.img_role == "main"].file_path.tolist()
         detail = g[g.img_role == "detail"].file_path.tolist()
         size_pic = g[g.img_role == "size"].file_path.tolist()
-        opt_qty = g[(g.img_role == "option") & (g.option_tag == "qty")]
-        opt_noqty = g[(g.img_role == "option") & (g.option_tag == "noqty")]
-        opts = (
-            opt_qty
-            if OPTION_TAG == "qty" and len(opt_qty)
-            else opt_noqty if OPTION_TAG == "noqty" else g[g.img_role == "option"]
-        )
-        if opts.empty:
+        opt_g = g[g.img_role == "option"]
+        if opt_g.empty:
             continue
-        for r in opts.itertuples():
-            pics = [r.file_path] + main + detail + size_pic
-            pics = pics[:10]
-            attr = attr_map.get(r.sku_code, {})
-            row = dict(
-                id=img_idx,
-                product_id=pr.id,
-                size=attr.get("size_desc", "") or "",
-                pack="2",
-                color=attr.get("color_desc", "") or "",
-                qty=attr.get("qty_desc", "") or "",
-                sku=r.sku_code,
-            )
-            for i, p in enumerate(pics, 1):
-                row[f"img_path{i}"] = p
-            out_rows.append(row)
-            img_idx += 1
+        sizes_all = (
+            sku_df.loc[sku_df.folder_id == fid, "size_desc"]
+            .dropna()
+            .astype(str)
+            .loc[lambda s: s != "/"]
+        )
+        if sizes_all.empty:
+            continue
+        sizes_all = pd.to_numeric(sizes_all, errors="coerce").dropna().sort_values().astype(str).tolist()
+        sz_map = (
+            sku_df[sku_df.folder_id == fid][["sku_code","size_desc","color_desc","qty_desc"]]
+            .dropna(subset=["size_desc"])
+        )
+        sz_map = sz_map.assign(size_val=pd.to_numeric(sz_map["size_desc"], errors="coerce")).dropna(subset=["size_val"])
+        if sz_map.empty:
+            continue
+        min_size = sz_map["size_val"].min()
+        base_skus = sz_map[sz_map["size_val"] == min_size]
+        base_skus = base_skus[base_skus["color_desc"].notna()]
+        base_colors_zh = base_skus["color_desc"].astype(str).unique().tolist()
+        if not base_colors_zh:
+            continue
+        colors_en = translate_colors(base_colors_zh)
+        color_cn2en = dict(zip(base_colors_zh, colors_en))
+        base_opt = opt_g.merge(
+            sku_df[["sku_code","color_desc","size_desc"]], on="sku_code", how="left"
+        )
+        base_opt = base_opt.assign(
+            size_val=pd.to_numeric(base_opt["size_desc"], errors="coerce")
+        )
+        base_opt = base_opt[base_opt["size_val"] == min_size]
+        color2optpath = {}
+        for r in base_opt.itertuples():
+            cz = str(getattr(r, "color_desc") or "")
+            if cz and cz not in color2optpath:
+                color2optpath[cz] = r.file_path
+        size_color_opt = {}
+        tmp = opt_g.merge(
+            sku_df[["sku_code","color_desc","size_desc"]], on="sku_code", how="left"
+        )
+        for r in tmp.itertuples():
+            sz = str(getattr(r, "size_desc") or "")
+            cz = str(getattr(r, "color_desc") or "")
+            if sz and cz:
+                size_color_opt[(sz, cz)] = r.file_path
+        prod_rows = []
+        for sz in sizes_all:
+            for cz in base_colors_zh:
+                opt_path = size_color_opt.get((sz, cz), color2optpath.get(cz, None))
+                pics = ([opt_path] if opt_path else []) + main + detail + size_pic
+                pics = pics[:10]
+                matched_sku = (
+                    sku_df[(sku_df.folder_id == fid) & (sku_df.size_desc.astype(str) == sz) & (sku_df.color_desc.astype(str) == cz)]
+                )
+                if matched_sku.empty:
+                    matched_sku = sku_df[(sku_df.folder_id == fid) & (sku_df.size_desc.astype(str) == sz)]
+                sku_code = matched_sku.iloc[0]["sku_code"] if not matched_sku.empty else ""
+                qty = matched_sku.iloc[0]["qty_desc"] if not matched_sku.empty else ""
+                row = dict(
+                    id=img_idx,
+                    product_id=pr.id,
+                    size=sz,
+                    pack="2",
+                    color=color_cn2en.get(cz, cz),
+                    qty=str(qty) if pd.notna(qty) else "",
+                    sku=sku_code,
+                )
+                for i, p in enumerate(pics, 1):
+                    row[f"img_path{i}"] = p
+                prod_rows.append(row)
+                img_idx += 1
+        df_prod = pd.DataFrame(prod_rows)
+        df_prod = df_prod.drop_duplicates(subset=["product_id","size","pack","color"], keep="first")
+        out_rows.extend(df_prod.to_dict(orient="records"))
     df = pd.DataFrame(out_rows)
-    chk = (
-        df.groupby("product_id")
-        .apply(lambda g: len(g[["size", "pack", "color"]].drop_duplicates()) != len(g))
-        .reset_index(name="mismatch")
-    )
-    bad_ids = chk[chk.mismatch].product_id.tolist()
-    if bad_ids:
-        df[df.product_id.isin(bad_ids)].to_excel("variant_mismatch.xlsx", index=False)
-    df.to_excel(
-        r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\mercado_images.xlsx",
-        index=False,
-    )
+    if not df.empty:
+        chk = (
+            df.groupby("product_id")
+            .apply(lambda g: len(g[["size", "pack", "color"]].drop_duplicates()) != len(g))
+            .reset_index(name="mismatch")
+        )
+        bad_ids = chk[chk.mismatch].product_id.tolist()
+        if bad_ids:
+            df[df.product_id.isin(bad_ids)].to_excel(os.path.join(OUT_DIR, "variant_mismatch.xlsx"), index=False)
+    out_path = os.path.join(OUT_DIR, "mercado_images.xlsx")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    df.to_excel(out_path, index=False)
 
 
 def main():
