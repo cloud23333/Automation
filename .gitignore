@@ -4,3 +4,4 @@
 src/多模块-自动上新/chrome/
 __pycache__/
 *.py[cod]
+*.xlsx
