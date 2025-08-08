@@ -215,8 +215,12 @@ def get_img_paths_from_row(row):
 
 
 def run(driver):
-    df_products = pd.read_excel(config.MERCADO_PRODUCTS_XLSX, engine="openpyxl")
-    df_images = pd.read_excel(config.MERCADO_IMAGES_XLSX, engine="openpyxl")
+    df_products = pd.read_excel(
+        config.MERCADO_XLSX, sheet_name="products", engine="openpyxl"
+    )
+    df_images = pd.read_excel(
+        config.MERCADO_XLSX, sheet_name="images", engine="openpyxl"
+    )
     for _, product_row in df_products.iterrows():
         product_id = product_row["id"]
         info_dict = {

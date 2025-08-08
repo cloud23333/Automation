@@ -8,13 +8,7 @@ ATTR_TIMEOUT = 3
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "数据"
 
-MERCADO_PRODUCTS_XLSX = Path(
-    os.getenv("MERCADO_PRODUCTS_XLSX", DATA_DIR / "mercado_products.xlsx")
-)
-MERCADO_IMAGES_XLSX = Path(
-    os.getenv("MERCADO_IMAGES_XLSX", DATA_DIR / "mercado_images.xlsx")
-)
-
+MERCADO_XLSX = Path(os.getenv("MERCADO_XLSX", DATA_DIR / "mercado.xlsx"))
 
 SHOPEE_PRODUCTS_XLSX = Path(
     os.getenv("SHOPEE_PRODUCTS_XLSX", DATA_DIR / "shopee_products.xlsx")
