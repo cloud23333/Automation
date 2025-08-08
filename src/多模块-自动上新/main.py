@@ -1,11 +1,10 @@
-"""
 # 运行 Mercado
-cd C:\Users\Administrator\Documents\Mecrado\Automation\src\多模块-自动上新
-python main.py --platform=mercado
+# cd C:\Users\Administrator\Documents\Mecrado\Automation\src\多模块-自动上新
+# python main.py --platform=mercado
 
 # 运行 Shopee
-python main.py --platform=shopee
-"""
+# python main.py --platform=shopee
+
 
 import argparse, importlib
 from contextlib import suppress
