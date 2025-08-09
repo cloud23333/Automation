@@ -45,31 +45,24 @@ def load_data(folders: list[tuple[str, str, str]] | None = None):
     with eng.connect() as conn:
         base_sql = """
             SELECT pf.id AS folder_id, pf.folder_code, pf.style_name, pf.sku_folder
-            FROM   product_folder pf
-            WHERE  1=1
+            FROM product_folder pf
+            WHERE 1=1
         """
-        params: list[str] = []
         if folders:
-            conds = []
-            for fc, sn, sf in folders:
-                conds.append("(pf.folder_code=:fc{} AND pf.style_name=:sn{} AND pf.sku_folder=:sf{})".format(len(params), len(params), len(params)))
-                params += [fc, sn, sf]
-            named = {}
-            it = iter(params)
-            idx = 0
-            while True:
-                try:
-                    named[f"fc{idx}"] = next(it)
-                    named[f"sn{idx}"] = next(it)
-                    named[f"sf{idx}"] = next(it)
-                    idx += 1
-                except StopIteration:
-                    break
-            base_sql += " AND (" + " OR ".join(re.findall(r"\([^)]*\)", " ".join(conds))) + ")"
-            prod = pd.read_sql(text(base_sql), conn, params=named)
+            tuples = [(fc, sn, sf) for fc, sn, sf in folders]
+            parts = []
+            params = {}
+            for i, (fc, sn, sf) in enumerate(tuples):
+                parts.append(f"(:fc{i}, :sn{i}, :sf{i})")
+                params[f"fc{i}"] = fc
+                params[f"sn{i}"] = sn
+                params[f"sf{i}"] = sf
+            base_sql += " AND (pf.folder_code, pf.style_name, pf.sku_folder) IN (" + ",".join(parts) + ")"
+            prod = pd.read_sql(text(base_sql), conn, params=params)
         else:
-            base_sql += " AND pf.folder_code = :fc AND pf.style_name  = :sn"
-            prod = pd.read_sql(text(base_sql), conn, params={"fc":"MN-玛瑙","sn":"风格1"})
+            base_sql += " AND pf.folder_code = :fc AND pf.style_name = :sn"
+            prod = pd.read_sql(text(base_sql), conn, params={"fc": "MN-玛瑙", "sn": "风格1"})
+
         sku = pd.read_sql(
             text("SELECT sku_code, product_name, cost_price, weight_kg, folder_id, qty_desc, color_desc, size_desc, material_desc FROM sku"),
             conn,
