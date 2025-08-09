@@ -78,7 +78,7 @@ def load_data(folders: list[tuple[str, str, str]] | None = None):
 def _clean_title(t: str) -> str:
     t = re.sub(r"[#\\/+%^*<>$@~|]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
-    t = t[:55]
+    t = t[:60]
     t = re.sub(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]", "", t)
     return t.strip()
 
