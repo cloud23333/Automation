@@ -195,8 +195,7 @@ def fill_additional_info(driver):
     time.sleep(config.SLEEP_SHORT)
     wait_click(driver, "/html/body/form/div/div[13]/div[2]/button").click()
     time.sleep(config.SLEEP_SHORT)
-    wait_click(driver, "/html/body/form/div/div[13]/div[2]/ul/li[1]/a").click()
-    time.sleep(config.SLEEP_SHORT)
+    #wait_click(driver, "/html/body/form/div/div[13]/div[2]/ul/li[1]/a").click() # 立即发布
 
 
 def apply_secondary_images(driver):

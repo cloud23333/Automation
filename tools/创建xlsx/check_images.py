@@ -3,7 +3,8 @@ import sys, os, argparse, datetime as dt
 import pandas as pd
 from itertools import product
 
-DEFAULT_XLSX = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据\mercado.xlsx"
+DEFAULT_XLSX = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\xlsx文件\mercado\mercado.xlsx"
+OUT_DIR = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\xlsx文件\mercado"
 
 REQ_COLS = ("product_id", "size", "pack", "color")
 
@@ -104,7 +105,9 @@ def main():
     viol_mask = vdf.filter(like="R").any(axis=1)
     if viol_mask.any() or (not miss.empty):
         ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        out_path = os.path.splitext(xlsx_path)[0] + f"_violations_{ts}.xlsx"
+        base = os.path.splitext(os.path.basename(xlsx_path))[0] + f"_violations_{ts}.xlsx"
+        os.makedirs(OUT_DIR, exist_ok=True)
+        out_path = os.path.join(OUT_DIR, base)
         with pd.ExcelWriter(out_path, engine="openpyxl") as w:
             vdf[viol_mask].to_excel(w, index=False, sheet_name="violations")
             if not miss.empty:

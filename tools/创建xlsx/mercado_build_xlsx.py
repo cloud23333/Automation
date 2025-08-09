@@ -6,7 +6,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 TXT_PATH = r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\txt文件\mercado_folders.txt"
-OUT_DIR = r"C:\Users\Administrator\Documents\Mecrado\Automation\数据"
+OUT_DIR =  r"C:\Users\Administrator\Documents\Mecrado\Automation\tools\创建xlsx\xlsx文件\mercado"
 OUT_XLSX = "mercado.xlsx"
 
 MAX_DESC_LEN = 3500
